@@ -28,12 +28,14 @@
 
 Build real terminal applications with React. Glyph provides a full component model with flexbox layout (powered by Yoga), focus management, keyboard input, and efficient diff-based rendering. Write TUIs the same way you write web apps.
 
+![Glyph](./screehshots/glyph-main.jpg)
+
 ### Features
 
 | | |
 |---|---|
 | **Flexbox Layout** | Full CSS-like flexbox via Yoga &mdash; rows, columns, wrapping, alignment, gaps, padding |
-| **Rich Components** | Box, Text, Input, Button, ScrollView, List, Menu, Progress, Spinner, Toasts, Portal |
+| **Rich Components** | Box, Text, Input, Button, Select, ScrollView, List, Menu, Progress, Spinner, Toasts, Portal |
 | **Focus System** | Tab navigation, focus scopes, focus trapping for modals |
 | **Keyboard Input** | `useInput` hook, declarative `<Keybind>` component, vim-style bindings |
 | **Smart Rendering** | Double-buffered framebuffer with character-level diffing &mdash; only changed cells are written |
@@ -197,6 +199,33 @@ Styled menu built on `<List>`. Accepts structured items with labels, values, and
   highlightColor="yellow"
 />
 ```
+
+### `<Select>`
+
+Dropdown select with keyboard navigation and type-to-filter search.
+
+```tsx
+const [lang, setLang] = useState<string | undefined>();
+
+<Select
+  items={[
+    { label: "TypeScript", value: "ts" },
+    { label: "JavaScript", value: "js" },
+    { label: "Rust", value: "rust" },
+    { label: "Go", value: "go" },
+    { label: "COBOL", value: "cobol", disabled: true },
+  ]}
+  value={lang}
+  onChange={setLang}
+  placeholder="Pick a language..."
+  maxVisible={6}
+  highlightColor="yellow"
+/>
+```
+
+Focusable. `Enter`/`Space`/`Down` to open, `Up`/`Down` to navigate, `Enter` to confirm, `Escape` to close. Type characters to filter items when open. Disabled items are skipped.
+
+Props: `items`, `value`, `onChange`, `placeholder`, `maxVisible`, `highlightColor`, `searchable`, `style`, `focusedStyle`, `dropdownStyle`, `disabled`.
 
 ### `<FocusScope>`
 
@@ -435,6 +464,8 @@ pnpm --filter modal-input dev       # Modal, input, focus trapping
 pnpm --filter scrollview-demo dev   # Scrollable content
 pnpm --filter list-demo dev         # Keyboard-navigable list
 pnpm --filter menu-demo dev         # Styled menu
+pnpm --filter select-demo dev      # Dropdown select with search
+pnpm --filter dashboard dev        # Full task manager (all components)
 pnpm --filter showcase dev          # Progress, Spinner, Toasts
 ```
 

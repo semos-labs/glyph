@@ -28,7 +28,9 @@
 
 Build real terminal applications with React. Glyph provides a full component model with flexbox layout (powered by Yoga), focus management, keyboard input, and efficient diff-based rendering. Write TUIs the same way you write web apps.
 
-[![Glyph showcase](./screehshots/glyph-main.jpg)](./screehshots/glyph-showcase.mp4)
+![Glyph](./screehshots/glyph-main.jpg)
+![Glyph List](./screehshots/glyph-list.jpg)
+![Glyph Edit](./screehshots/glyph-edit.jpg)
 
 ### Features
 

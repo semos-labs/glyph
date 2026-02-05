@@ -41,5 +41,13 @@
     "typescript": "^5.5"
   },
   "keywords": ["react", "terminal", "tui", "cli", "flexbox"],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nick-skriabin/glyph.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nick-skriabin/glyph/issues"
+  },
+  "homepage": "https://github.com/nick-skriabin/glyph#readme"
 }

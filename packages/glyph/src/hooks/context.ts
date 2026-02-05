@@ -4,9 +4,11 @@ import type { GlyphNode } from "../reconciler/nodes.js";
 
 // ---- Input Context ----
 export type InputHandler = (key: Key) => void;
+export type FocusedInputHandler = (key: Key) => boolean;
 
 export interface InputContextValue {
   subscribe(handler: InputHandler): () => void;
+  registerInputHandler(focusId: string, handler: FocusedInputHandler): () => void;
 }
 
 export const InputContext = createContext<InputContextValue | null>(null);
@@ -20,6 +22,7 @@ export interface FocusContextValue {
   focusPrev(): void;
   trapIds: Set<string> | null;
   pushTrap(ids: Set<string>): () => void;
+  onFocusChange(handler: (focusedId: string | null) => void): () => void;
 }
 
 export const FocusContext = createContext<FocusContextValue | null>(null);
@@ -37,6 +40,9 @@ export interface AppContextValue {
   registerNode(node: GlyphNode): void;
   unregisterNode(node: GlyphNode): void;
   scheduleRender(): void;
+  exit(code?: number): void;
+  columns: number;
+  rows: number;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

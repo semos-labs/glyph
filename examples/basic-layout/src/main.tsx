@@ -17,7 +17,6 @@ function App() {
         border: "round",
         borderColor: "cyan",
         padding: 1,
-        gap: 1,
       }}
     >
       <Box
@@ -31,7 +30,7 @@ function App() {
         </Text>
       </Box>
 
-      <Box style={{ flexDirection: "row", flexGrow: 1, gap: 1 }}>
+      <Box style={{ flexDirection: "row", flexGrow: 1 }}>
         <Box
           style={{
             flexGrow: 1,

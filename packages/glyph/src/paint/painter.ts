@@ -3,6 +3,7 @@ import { getInheritedTextStyle, collectTextContent } from "../reconciler/nodes.j
 import type { Cell } from "./framebuffer.js";
 import { Framebuffer } from "./framebuffer.js";
 import { getBorderChars } from "./borders.js";
+import { isLightColor } from "./color.js";
 import type { Color, Style } from "../types/index.js";
 import { wrapLines } from "../layout/textMeasure.js";
 import stringWidth from "string-width";
@@ -101,6 +102,10 @@ function paintNode(
 
   if (width <= 0 || height <= 0) return;
 
+  // Resolve inherited bg so borders and fills don't erase a parent's background
+  const inherited = getInheritedTextStyle(node);
+  const effectiveBg = inherited.bg;
+
   // 1. Background fill
   if (style.bg) {
     for (let row = y; row < y + height; row++) {
@@ -116,7 +121,7 @@ function paintNode(
   const borderChars = style.border ? getBorderChars(style.border) : null;
   if (borderChars && width >= 2 && height >= 2) {
     const bc = style.borderColor;
-    const bg = style.bg;
+    const bg = effectiveBg;
 
     // Top border
     setClipped(fb, clip, x, y, borderChars.topLeft, bc, bg);
@@ -165,12 +170,19 @@ function setClipped(
   }
 }
 
+function autoContrastFg(explicitColor: Color | undefined, bg: Color | undefined): Color | undefined {
+  if (explicitColor !== undefined) return explicitColor;
+  if (bg === undefined) return undefined;
+  return isLightColor(bg) ? "black" : "white";
+}
+
 function paintText(node: GlyphNode, fb: Framebuffer, clip: ClipRect): void {
   const { innerX, innerY, innerWidth, innerHeight } = node.layout;
   const inherited = getInheritedTextStyle(node);
   const text = collectTextContent(node);
   if (!text) return;
 
+  const fg = autoContrastFg(inherited.color, inherited.bg);
   const wrapMode = node.style.wrap ?? "wrap";
   const textAlign = node.style.textAlign ?? "left";
   const rawLines = text.split("\n");
@@ -195,8 +207,8 @@ function paintText(node: GlyphNode, fb: Framebuffer, clip: ClipRect): void {
           fb, clip,
           innerX + offsetX + col, innerY + lineIdx,
           char,
-          inherited.color ?? node.style.color,
-          node.style.bg,
+          fg,
+          inherited.bg,
           inherited.bold,
           inherited.dim,
           inherited.italic,
@@ -223,9 +235,10 @@ function paintInput(
   const isPlaceholder = !value && !!placeholder;
   const inherited = getInheritedTextStyle(node);
 
+  const autoFg = autoContrastFg(inherited.color, inherited.bg);
   const fg = isPlaceholder
     ? (node.style.color ?? inherited.color ?? "blackBright")
-    : (inherited.color ?? node.style.color);
+    : (autoFg ?? inherited.color ?? node.style.color);
 
   // Draw text
   let col = 0;
@@ -238,7 +251,7 @@ function paintInput(
         innerX + col, innerY,
         char,
         isPlaceholder ? "blackBright" : fg,
-        node.style.bg,
+        inherited.bg,
         inherited.bold,
         inherited.dim,
         inherited.italic,

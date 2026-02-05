@@ -7,6 +7,19 @@ export class Terminal {
   private wasRaw = false;
   private cleanedUp = false;
 
+  // Data handler dispatch - single stdin listener, filters OSC, dispatches clean data
+  private dataHandlers = new Set<(data: string) => void>();
+  private stdinAttached = false;
+
+  // OSC response filtering state
+  private oscState: "normal" | "esc" | "osc" | "osc_esc" = "normal";
+  private oscAccum = "";
+  private escFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Terminal palette (populated by queryPalette)
+  palette = new Map<number, [number, number, number]>();
+  private paletteResolve: (() => void) | null = null;
+
   constructor(
     stdout: NodeJS.WriteStream = process.stdout,
     stdin: NodeJS.ReadStream = process.stdin,
@@ -72,7 +85,7 @@ export class Terminal {
     this.enterAltScreen();
     this.hideCursor();
     this.clearScreen();
-
+    this.attachStdinListener();
     this.installCleanupHandlers();
   }
 
@@ -80,10 +93,176 @@ export class Terminal {
     if (this.cleanedUp) return;
     this.cleanedUp = true;
 
+    if (this.escFlushTimer !== null) {
+      clearTimeout(this.escFlushTimer);
+      this.escFlushTimer = null;
+    }
+
     this.resetStyles();
     this.showCursor();
     this.exitAltScreen();
     this.exitRawMode();
+  }
+
+  // ---- Data handling with OSC filtering ----
+
+  private attachStdinListener(): void {
+    if (this.stdinAttached) return;
+    this.stdinAttached = true;
+
+    this.stdin.on("data", (data: Buffer | string) => {
+      let str = typeof data === "string" ? data : data.toString("utf-8");
+      this.dispatchFiltered(str);
+    });
+  }
+
+  onData(handler: (data: string) => void): () => void {
+    this.dataHandlers.add(handler);
+    return () => {
+      this.dataHandlers.delete(handler);
+    };
+  }
+
+  // ---- OSC response filtering ----
+
+  private dispatchFiltered(raw: string): void {
+    // Cancel any pending standalone-ESC flush since more data arrived
+    if (this.escFlushTimer !== null) {
+      clearTimeout(this.escFlushTimer);
+      this.escFlushTimer = null;
+    }
+
+    const clean = this.filterOsc(raw);
+
+    if (clean.length > 0) {
+      for (const handler of this.dataHandlers) {
+        handler(clean);
+      }
+    }
+
+    // If filterOsc ended in "esc" state, a standalone ESC byte is pending.
+    // Use a short timeout to disambiguate: if no more data arrives within 50ms,
+    // treat it as a standalone Escape keypress and flush it.
+    if (this.oscState === "esc") {
+      this.escFlushTimer = setTimeout(() => {
+        this.escFlushTimer = null;
+        this.oscState = "normal";
+        for (const handler of this.dataHandlers) {
+          handler("\x1b");
+        }
+      }, 50);
+    }
+  }
+
+  private filterOsc(raw: string): string {
+    let clean = "";
+
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i]!;
+      const code = raw.charCodeAt(i);
+
+      switch (this.oscState) {
+        case "normal":
+          if (code === 0x1b) {
+            this.oscState = "esc";
+          } else {
+            clean += ch;
+          }
+          break;
+
+        case "esc":
+          if (ch === "]") {
+            // Start of OSC sequence
+            this.oscState = "osc";
+            this.oscAccum = "";
+          } else {
+            // Not OSC — pass through the ESC and current char
+            clean += "\x1b" + ch;
+            this.oscState = "normal";
+          }
+          break;
+
+        case "osc":
+          if (code === 0x07) {
+            // BEL terminator
+            this.handleOscResponse(this.oscAccum);
+            this.oscAccum = "";
+            this.oscState = "normal";
+          } else if (code === 0x1b) {
+            // Possible ST (ESC \)
+            this.oscState = "osc_esc";
+          } else {
+            this.oscAccum += ch;
+          }
+          break;
+
+        case "osc_esc":
+          if (ch === "\\") {
+            // ST terminator
+            this.handleOscResponse(this.oscAccum);
+            this.oscAccum = "";
+            this.oscState = "normal";
+          } else {
+            // Not ST, accumulate
+            this.oscAccum += "\x1b" + ch;
+            this.oscState = "osc";
+          }
+          break;
+      }
+    }
+
+    return clean;
+  }
+
+  private handleOscResponse(data: string): void {
+    // Parse OSC 4 response: "4;{index};rgb:{rrrr}/{gggg}/{bbbb}"
+    const match = data.match(
+      /^4;(\d+);rgb:([0-9a-fA-F]+)\/([0-9a-fA-F]+)\/([0-9a-fA-F]+)/,
+    );
+    if (match) {
+      const index = parseInt(match[1]!, 10);
+      // Terminal reports 16-bit hex (e.g. "ffff"), take high byte for 8-bit
+      const r = parseInt(match[2]!.substring(0, 2), 16);
+      const g = parseInt(match[3]!.substring(0, 2), 16);
+      const b = parseInt(match[4]!.substring(0, 2), 16);
+      this.palette.set(index, [r, g, b]);
+      if (this.palette.size >= 16 && this.paletteResolve) {
+        this.paletteResolve();
+        this.paletteResolve = null;
+      }
+    }
+  }
+
+  // ---- Palette querying ----
+
+  queryPalette(): Promise<Map<number, [number, number, number]>> {
+    return new Promise((resolve) => {
+      const done = () => resolve(this.palette);
+
+      // If terminal doesn't respond, resolve with whatever we have after timeout
+      const timeout = setTimeout(done, 200);
+
+      this.paletteResolve = () => {
+        clearTimeout(timeout);
+        done();
+      };
+
+      // Query colors 0-15 (the 16 standard ANSI colors)
+      let query = "";
+      for (let i = 0; i < 16; i++) {
+        query += `\x1b]4;${i};?\x07`;
+      }
+      this.write(query);
+    });
+  }
+
+  // ---- Event handling ----
+
+  onResize(handler: () => void): () => void {
+    this.stdout.on("resize", handler);
+    return () => {
+      this.stdout.off("resize", handler);
+    };
   }
 
   private installCleanupHandlers(): void {
@@ -110,22 +289,5 @@ export class Terminal {
       console.error(err);
       process.exit(1);
     });
-  }
-
-  onResize(handler: () => void): () => void {
-    this.stdout.on("resize", handler);
-    return () => {
-      this.stdout.off("resize", handler);
-    };
-  }
-
-  onData(handler: (data: string) => void): () => void {
-    const listener = (data: Buffer | string) => {
-      handler(typeof data === "string" ? data : data.toString("utf-8"));
-    };
-    this.stdin.on("data", listener);
-    return () => {
-      this.stdin.off("data", listener);
-    };
   }
 }

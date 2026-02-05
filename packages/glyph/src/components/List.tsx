@@ -1,0 +1,154 @@
+import React, { useContext, useEffect, useRef, useState, useCallback } from "react";
+import type { ReactNode } from "react";
+import type { Style, Key } from "../types/index.js";
+import type { GlyphNode } from "../reconciler/nodes.js";
+import { FocusContext, InputContext } from "../hooks/context.js";
+
+export interface ListItemInfo {
+  index: number;
+  selected: boolean;
+  focused: boolean;
+}
+
+export interface ListProps {
+  /** Total number of items */
+  count: number;
+  /** Render function for each item */
+  renderItem: (info: ListItemInfo) => ReactNode;
+  /** Controlled selected index */
+  selectedIndex?: number;
+  /** Callback when selected index should change */
+  onSelectionChange?: (index: number) => void;
+  /** Callback when enter is pressed on selected item */
+  onSelect?: (index: number) => void;
+  /** Initial index for uncontrolled mode */
+  defaultSelectedIndex?: number;
+  /** Set of disabled indices that are skipped during navigation */
+  disabledIndices?: Set<number>;
+  /** Outer box style */
+  style?: Style;
+  /** Whether the list is focusable (default: true) */
+  focusable?: boolean;
+}
+
+export function List({
+  count,
+  renderItem,
+  selectedIndex: controlledIndex,
+  onSelectionChange,
+  onSelect,
+  defaultSelectedIndex = 0,
+  disabledIndices,
+  style,
+  focusable = true,
+}: ListProps): React.JSX.Element {
+  const isControlled = controlledIndex !== undefined;
+  const [internalIndex, setInternalIndex] = useState(defaultSelectedIndex);
+  const selectedIndex = isControlled ? controlledIndex : internalIndex;
+
+  const focusCtx = useContext(FocusContext);
+  const inputCtx = useContext(InputContext);
+  const nodeRef = useRef<GlyphNode | null>(null);
+  const focusIdRef = useRef<string | null>(null);
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+
+  const [isFocused, setIsFocused] = useState(false);
+
+  const setIndex = useCallback(
+    (next: number) => {
+      const clamped = Math.max(0, Math.min(next, count - 1));
+      if (isControlled) {
+        onSelectionChange?.(clamped);
+      } else {
+        setInternalIndex(clamped);
+      }
+    },
+    [isControlled, onSelectionChange, count],
+  );
+
+  // Find next non-disabled index in given direction
+  const findNextEnabled = useCallback(
+    (from: number, direction: 1 | -1): number => {
+      if (!disabledIndices || disabledIndices.size === 0) {
+        return Math.max(0, Math.min(from + direction, count - 1));
+      }
+      let next = from + direction;
+      while (next >= 0 && next < count && disabledIndices.has(next)) {
+        next += direction;
+      }
+      if (next < 0 || next >= count) return from; // stay put
+      return next;
+    },
+    [disabledIndices, count],
+  );
+
+  // Register with focus system
+  useEffect(() => {
+    if (!focusCtx || !focusIdRef.current || !nodeRef.current || !focusable) return;
+    return focusCtx.register(focusIdRef.current, nodeRef.current);
+  }, [focusCtx, focusable]);
+
+  // Subscribe to focus changes
+  useEffect(() => {
+    if (!focusCtx || !focusIdRef.current) return;
+    const fid = focusIdRef.current;
+    setIsFocused(focusCtx.focusedId === fid);
+    return focusCtx.onFocusChange((newId) => {
+      setIsFocused(newId === fid);
+    });
+  }, [focusCtx]);
+
+  // Handle keyboard when focused
+  useEffect(() => {
+    if (!inputCtx || !focusIdRef.current || !focusable) return;
+    const fid = focusIdRef.current;
+
+    const handler = (key: Key): boolean => {
+      if (focusCtx?.focusedId !== fid) return false;
+
+      if (key.name === "up") {
+        setIndex(findNextEnabled(selectedIndex, -1));
+        return true;
+      }
+      if (key.name === "down") {
+        setIndex(findNextEnabled(selectedIndex, 1));
+        return true;
+      }
+      if (key.name === "return") {
+        if (!(disabledIndices?.has(selectedIndex))) {
+          onSelectRef.current?.(selectedIndex);
+        }
+        return true;
+      }
+      return false;
+    };
+
+    return inputCtx.registerInputHandler(fid, handler);
+  }, [inputCtx, focusCtx, focusable, selectedIndex, setIndex, findNextEnabled, disabledIndices]);
+
+  // Render items
+  const items: ReactNode[] = [];
+  for (let i = 0; i < count; i++) {
+    items.push(
+      React.createElement(React.Fragment, { key: i },
+        renderItem({ index: i, selected: i === selectedIndex, focused: isFocused }),
+      ),
+    );
+  }
+
+  return React.createElement(
+    "box" as any,
+    {
+      style: { flexDirection: "column" as const, ...style },
+      focusable: focusable,
+      ref: (node: any) => {
+        if (node) {
+          nodeRef.current = node;
+          focusIdRef.current = node.focusId;
+        }
+      },
+    },
+    ...items,
+  );
+}

@@ -1,6 +1,7 @@
-import React, { useState, useCallback, useContext, useEffect, useRef } from "react";
+import React, { useState, useContext, useEffect, useRef } from "react";
 import type { Style, Key } from "../types/index.js";
 import { InputContext, FocusContext } from "../hooks/context.js";
+import type { GlyphNode } from "../reconciler/nodes.js";
 
 export interface InputProps {
   value?: string;
@@ -16,74 +17,129 @@ export function Input(props: InputProps): React.JSX.Element {
   const [cursorPos, setCursorPos] = useState(defaultValue.length);
   const inputCtx = useContext(InputContext);
   const focusCtx = useContext(FocusContext);
+  const nodeRef = useRef<GlyphNode | null>(null);
   const focusIdRef = useRef<string | null>(null);
 
   const isControlled = controlledValue !== undefined;
   const value = isControlled ? controlledValue : internalValue;
 
+  // Keep a ref to current value/cursor so the handler closure always reads fresh values
+  const stateRef = useRef({ value, cursorPos, isControlled, onChange });
+  stateRef.current = { value, cursorPos, isControlled, onChange };
+
+  // Register with focus system
   useEffect(() => {
-    if (!inputCtx || !focusCtx) return;
+    if (!focusCtx || !focusIdRef.current || !nodeRef.current) return;
+    return focusCtx.register(focusIdRef.current, nodeRef.current);
+  }, [focusCtx]);
 
-    const handleKey = (key: Key) => {
-      // Only handle keys when this input is focused
-      if (!focusIdRef.current || focusCtx.focusedId !== focusIdRef.current) return;
+  // Register focused input handler - returns true for consumed keys
+  useEffect(() => {
+    if (!inputCtx || !focusIdRef.current) return;
+    const fid = focusIdRef.current;
 
-      if (key.name === "tab" || (key.name === "tab" && key.shift)) return;
+    const handler = (key: Key): boolean => {
+      const { value: val, cursorPos: pos, isControlled: ctrl, onChange: cb } = stateRef.current;
 
-      if (key.name === "return" || key.name === "escape") return;
+      // Pass through escape/return - let useInput handlers see them
+      if (key.name === "escape" || key.name === "return") return false;
+
+      // Ctrl shortcuts consumed by the input
+      if (key.ctrl) {
+        if (key.name === "w") {
+          // Delete word backward
+          if (pos > 0) {
+            let i = pos;
+            while (i > 0 && val[i - 1] === " ") i--;
+            while (i > 0 && val[i - 1] !== " ") i--;
+            const newVal = val.slice(0, i) + val.slice(pos);
+            if (!ctrl) setInternalValue(newVal);
+            cb?.(newVal);
+            setCursorPos(i);
+          }
+          return true;
+        }
+        if (key.name === "a") { setCursorPos(0); return true; }
+        if (key.name === "e") { setCursorPos(val.length); return true; }
+        if (key.name === "u") {
+          // Delete from cursor to start
+          if (pos > 0) {
+            const newVal = val.slice(pos);
+            if (!ctrl) setInternalValue(newVal);
+            cb?.(newVal);
+            setCursorPos(0);
+          }
+          return true;
+        }
+        if (key.name === "k") {
+          // Delete from cursor to end
+          if (pos < val.length) {
+            const newVal = val.slice(0, pos);
+            if (!ctrl) setInternalValue(newVal);
+            cb?.(newVal);
+          }
+          return true;
+        }
+        // All other ctrl combos pass through to useInput
+        return false;
+      }
+
+      // Pass through alt combos to useInput
+      if (key.alt) return false;
 
       if (key.name === "left") {
         setCursorPos((p) => Math.max(0, p - 1));
-        return;
+        return true;
       }
       if (key.name === "right") {
-        setCursorPos((p) => Math.min(value.length, p + 1));
-        return;
+        setCursorPos((p) => Math.min(val.length, p + 1));
+        return true;
       }
       if (key.name === "home") {
         setCursorPos(0);
-        return;
+        return true;
       }
       if (key.name === "end") {
-        setCursorPos(value.length);
-        return;
+        setCursorPos(val.length);
+        return true;
       }
       if (key.name === "backspace") {
-        if (cursorPos > 0) {
-          const newVal = value.slice(0, cursorPos - 1) + value.slice(cursorPos);
-          if (!isControlled) setInternalValue(newVal);
-          onChange?.(newVal);
+        if (pos > 0) {
+          const newVal = val.slice(0, pos - 1) + val.slice(pos);
+          if (!ctrl) setInternalValue(newVal);
+          cb?.(newVal);
           setCursorPos((p) => Math.max(0, p - 1));
         }
-        return;
+        return true;
       }
       if (key.name === "delete") {
-        if (cursorPos < value.length) {
-          const newVal = value.slice(0, cursorPos) + value.slice(cursorPos + 1);
-          if (!isControlled) setInternalValue(newVal);
-          onChange?.(newVal);
+        if (pos < val.length) {
+          const newVal = val.slice(0, pos) + val.slice(pos + 1);
+          if (!ctrl) setInternalValue(newVal);
+          cb?.(newVal);
         }
-        return;
+        return true;
       }
 
-      // Ignore ctrl combos and special keys
-      if (key.ctrl || key.alt) return;
-      if (key.name.length > 1) return;
+      // Special/function keys we don't handle - pass through
+      if (key.name.length > 1) return false;
 
-      // Insert printable character
+      // Printable character - consume it
       const ch = key.sequence;
       if (ch.length === 1 && ch.charCodeAt(0) >= 32) {
-        const newVal = value.slice(0, cursorPos) + ch + value.slice(cursorPos);
-        if (!isControlled) setInternalValue(newVal);
-        onChange?.(newVal);
+        const newVal = val.slice(0, pos) + ch + val.slice(pos);
+        if (!ctrl) setInternalValue(newVal);
+        cb?.(newVal);
         setCursorPos((p) => p + 1);
+        return true;
       }
+
+      return false;
     };
 
-    return inputCtx.subscribe(handleKey);
-  }, [inputCtx, focusCtx, value, cursorPos, isControlled, onChange]);
+    return inputCtx.registerInputHandler(fid, handler);
+  }, [inputCtx]);
 
-  // The element will be created by the reconciler with type "input"
   return React.createElement("input" as any, {
     style,
     value,
@@ -92,7 +148,8 @@ export function Input(props: InputProps): React.JSX.Element {
     onChange,
     cursorPosition: cursorPos,
     ref: (node: any) => {
-      if (node && node.focusId) {
+      if (node) {
+        nodeRef.current = node;
         focusIdRef.current = node.focusId;
       }
     },

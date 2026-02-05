@@ -8,6 +8,7 @@ export interface GlyphNode {
   props: Record<string, any>;
   style: Style;
   children: GlyphNode[];
+  rawTextChildren: GlyphTextInstance[];
   parent: GlyphNode | null;
   yogaNode: YogaNode | null;
   text: string | null;
@@ -43,6 +44,7 @@ export function createGlyphNode(
     props,
     style,
     children: [],
+    rawTextChildren: [],
     parent: null,
     yogaNode: null,
     text: null,
@@ -81,6 +83,7 @@ export function insertBefore(
 
 export function getInheritedTextStyle(node: GlyphNode): {
   color?: Color;
+  bg?: Color;
   bold?: boolean;
   dim?: boolean;
   italic?: boolean;
@@ -88,6 +91,7 @@ export function getInheritedTextStyle(node: GlyphNode): {
 } {
   const result: {
     color?: Color;
+    bg?: Color;
     bold?: boolean;
     dim?: boolean;
     italic?: boolean;
@@ -98,6 +102,7 @@ export function getInheritedTextStyle(node: GlyphNode): {
   while (current) {
     const s = current.style;
     if (result.color === undefined && s.color !== undefined) result.color = s.color;
+    if (result.bg === undefined && s.bg !== undefined) result.bg = s.bg;
     if (result.bold === undefined && s.bold !== undefined) result.bold = s.bold;
     if (result.dim === undefined && s.dim !== undefined) result.dim = s.dim;
     if (result.italic === undefined && s.italic !== undefined) result.italic = s.italic;

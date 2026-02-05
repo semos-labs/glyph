@@ -17,7 +17,6 @@ import type { Style } from "../types/index.js";
 const DefaultEventPriority = 32;
 
 type Props = Record<string, any>;
-type UpdatePayload = { props: Props } | null;
 
 export const hostConfig = {
   supportsMutation: true,
@@ -32,13 +31,51 @@ export const hostConfig = {
   supportsMicrotasks: true,
   scheduleMicrotask: queueMicrotask,
 
+  // Priority & event methods required by react-reconciler v0.31
+  getCurrentUpdatePriority: () => DefaultEventPriority,
+  setCurrentUpdatePriority: (_priority: number) => {},
+  resolveUpdatePriority: () => DefaultEventPriority,
   getCurrentEventPriority: () => DefaultEventPriority,
+  resolveEventType: () => null as any,
+  resolveEventTimeStamp: () => -1.1,
+  shouldAttemptEagerTransition: () => false,
+
   getInstanceFromNode: () => null,
   beforeActiveInstanceBlur: () => {},
   afterActiveInstanceBlur: () => {},
   prepareScopeUpdate: () => {},
   getInstanceFromScope: () => null,
   detachDeletedInstance: () => {},
+
+  requestPostPaintCallback: (_callback: any) => {},
+
+  // Commit suspension stubs (required by react-reconciler v0.31)
+  maySuspendCommit: (_type: string, _props: Props) => false,
+  preloadInstance: (_type: string, _props: Props) => true,
+  startSuspendingCommit: () => {},
+  suspendInstance: (_type: string, _props: Props) => {},
+  waitForCommitToBeReady: () => null,
+
+  // Transition stubs
+  NotPendingTransition: null as any,
+  HostTransitionContext: { $$typeof: Symbol.for("react.context"), _currentValue: null as any } as any,
+  resetFormInstance: (_instance: any) => {},
+
+  // Console binding
+  bindToConsole: (methodName: string, args: any[], _errorPrefix: string) => {
+    return (Function.prototype.bind as any).call(
+      (console as any)[methodName],
+      console,
+      ...args,
+    );
+  },
+
+  // Resource/singleton stubs
+  supportsResources: false,
+  isHostHoistableType: (_type: string, _props: Props) => false,
+  supportsSingletons: false,
+  isHostSingletonType: (_type: string) => false,
+  supportsTestSelectors: false,
 
   createInstance(
     type: string,
@@ -64,10 +101,10 @@ export const hostConfig = {
     child: GlyphNode | GlyphTextInstance,
   ): void {
     if (child.type === "raw-text") {
-      // Append raw text to parent's text
-      parentInstance.text =
-        (parentInstance.text ?? "") + (child as GlyphTextInstance).text;
-      child.parent = parentInstance;
+      const textChild = child as GlyphTextInstance;
+      textChild.parent = parentInstance;
+      parentInstance.rawTextChildren.push(textChild);
+      parentInstance.text = parentInstance.rawTextChildren.map((t) => t.text).join("");
     } else {
       glyphAppendChild(parentInstance, child as GlyphNode);
     }
@@ -83,31 +120,19 @@ export const hostConfig = {
     return false;
   },
 
-  prepareUpdate(
-    _instance: GlyphNode,
-    _type: string,
-    oldProps: Props,
-    newProps: Props,
-    _rootContainer: GlyphContainer,
-    _hostContext: null,
-  ): UpdatePayload {
-    // Simple: always update if props changed
-    return { props: newProps };
-  },
-
   shouldSetTextContent(_type: string, _props: Props): boolean {
     return false;
   },
 
-  getRootHostContext(_rootContainer: GlyphContainer): null {
-    return null;
+  getRootHostContext(_rootContainer: GlyphContainer): Record<string, never> {
+    return {};
   },
 
   getChildHostContext(
-    parentHostContext: null,
+    parentHostContext: Record<string, never>,
     _type: string,
     _rootContainer: GlyphContainer,
-  ): null {
+  ): Record<string, never> {
     return parentHostContext;
   },
 
@@ -131,9 +156,10 @@ export const hostConfig = {
     child: GlyphNode | GlyphTextInstance,
   ): void {
     if (child.type === "raw-text") {
-      parentInstance.text =
-        (parentInstance.text ?? "") + (child as GlyphTextInstance).text;
-      child.parent = parentInstance;
+      const textChild = child as GlyphTextInstance;
+      textChild.parent = parentInstance;
+      parentInstance.rawTextChildren.push(textChild);
+      parentInstance.text = parentInstance.rawTextChildren.map((t) => t.text).join("");
     } else {
       glyphAppendChild(parentInstance, child as GlyphNode);
     }
@@ -179,8 +205,11 @@ export const hostConfig = {
     child: GlyphNode | GlyphTextInstance,
   ): void {
     if (child.type === "raw-text") {
-      child.parent = null;
-      // Rebuild text from remaining text children - simplified
+      const textChild = child as GlyphTextInstance;
+      textChild.parent = null;
+      const idx = parentInstance.rawTextChildren.indexOf(textChild);
+      if (idx !== -1) parentInstance.rawTextChildren.splice(idx, 1);
+      parentInstance.text = parentInstance.rawTextChildren.map((t) => t.text).join("") || null;
       return;
     }
     glyphRemoveChild(parentInstance, child as GlyphNode);
@@ -205,16 +234,19 @@ export const hostConfig = {
   ): void {
     textInstance.text = newText;
     if (textInstance.parent) {
-      // Rebuild parent text
-      rebuildParentText(textInstance.parent);
+      // Rebuild parent text from tracked raw text children
+      textInstance.parent.text = textInstance.parent.rawTextChildren
+        .map((t) => t.text)
+        .join("");
     }
   },
 
+  // v0.31 signature: (instance, type, oldProps, newProps, internalHandle)
+  // updatePayload was removed in this version
   commitUpdate(
     instance: GlyphNode,
-    updatePayload: UpdatePayload,
     _type: string,
-    _prevProps: Props,
+    _oldProps: Props,
     newProps: Props,
     _internalHandle: any,
   ): void {
@@ -250,8 +282,3 @@ export const hostConfig = {
   },
 };
 
-function rebuildParentText(parent: GlyphNode): void {
-  // For text nodes, we rebuild the combined text from all raw-text children
-  // This is simplified; in a more complex implementation, we'd track text children separately
-  parent.text = null;
-}

@@ -1,5 +1,16 @@
 import React, { useState, useCallback } from "react";
-import { render, Box, Text, Input, FocusScope, useInput } from "glyph";
+import {
+  render,
+  Box,
+  Text,
+  Input,
+  FocusScope,
+  Spacer,
+  Keybind,
+  Portal,
+  Button,
+  useApp,
+} from "glyph";
 
 function Modal({
   onClose,
@@ -8,81 +19,65 @@ function Modal({
 }) {
   const [name, setName] = useState("");
 
-  useInput((key) => {
-    if (key.name === "escape") {
-      onClose();
-    }
-  });
-
   return (
-    <Box
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        width: "100%",
-        height: "100%",
-        justifyContent: "center",
-        alignItems: "center",
-        bg: "black",
-        zIndex: 10,
-      }}
-    >
+    <Portal>
       <Box
         style={{
-          width: 50,
-          height: 12,
-          border: "double",
-          borderColor: "yellowBright",
-          bg: "black",
-          flexDirection: "column",
-          padding: 1,
-          gap: 1,
+          width: "100%",
+          height: "100%",
+          justifyContent: "center",
+          alignItems: "center",
         }}
       >
-        <Text style={{ bold: true, color: "yellowBright", textAlign: "center" }}>
-          Modal Dialog
-        </Text>
+        <Box
+          style={{
+            width: 50,
+            border: "double",
+            borderColor: "yellowBright",
+            bg: "black",
+            flexDirection: "column",
+            padding: 1,
+            gap: 1,
+          }}
+        >
+          <Text style={{ bold: true, color: "yellowBright", textAlign: "center" }}>
+            Modal Dialog
+          </Text>
 
-        <Text style={{ color: "white" }}>Enter your name:</Text>
+          <Text style={{ color: "white" }}>Enter your name:</Text>
 
-        <FocusScope trap>
-          <Input
-            value={name}
-            onChange={setName}
-            placeholder="Type here..."
-            style={{
-              border: "single",
-              borderColor: "cyan",
-              padding: 0,
-              width: "100%",
-            }}
-          />
-        </FocusScope>
+          <FocusScope trap>
+            <Input
+              value={name}
+              onChange={setName}
+              placeholder="Type here..."
+              style={{
+                border: "single",
+                borderColor: "cyan",
+                padding: 0,
+                width: "100%",
+              }}
+            />
+          </FocusScope>
 
-        {name.length > 0 && (
-          <Text style={{ color: "green" }}>Hello, {name}!</Text>
-        )}
+          {name.length > 0 && (
+            <Text style={{ color: "green" }}>Hello, {name}!</Text>
+          )}
 
-        <Text style={{ dim: true, textAlign: "center" }}>
-          Press ESC to close
-        </Text>
+          <Text style={{ dim: true, textAlign: "center" }}>
+            Press ESC to close
+          </Text>
+
+          <Keybind keypress="escape" onPress={onClose} />
+        </Box>
       </Box>
-    </Box>
+    </Portal>
   );
 }
 
 function App() {
   const [showModal, setShowModal] = useState(false);
-
-  useInput((key) => {
-    if (key.name === "q" && !showModal) {
-      process.exit(0);
-    }
-    if (key.name === "m" && !showModal) {
-      setShowModal(true);
-    }
-  });
+  const { exit } = useApp();
 
   const handleClose = useCallback(() => {
     setShowModal(false);
@@ -105,14 +100,47 @@ function App() {
 
       <Box style={{ flexGrow: 1, padding: 1, flexDirection: "column", gap: 1 }}>
         <Text style={{ color: "white" }}>
-          This demonstrates absolute positioning, zIndex, focus trapping, and text input.
+          This demonstrates Portal, Keybind, Spacer, Button, and text input.
         </Text>
-        <Text style={{ color: "cyan" }}>
-          Press 'm' to open a modal with a text input.
-        </Text>
-        <Text style={{ color: "cyan" }}>
-          Press 'q' to quit.
-        </Text>
+
+        <Spacer />
+
+        <Box style={{ flexDirection: "row", gap: 2 }}>
+          <Button
+            onPress={() => setShowModal(true)}
+            style={{
+              border: "single",
+              borderColor: "cyan",
+              paddingX: 2,
+            }}
+            focusedStyle={{
+              border: "single",
+              borderColor: "yellowBright",
+              paddingX: 2,
+              bold: true,
+            }}
+          >
+            <Text>Open Modal (m)</Text>
+          </Button>
+
+          <Button
+            onPress={() => exit()}
+            style={{
+              border: "single",
+              borderColor: "red",
+              paddingY: 0,
+              paddingX: 2,
+            }}
+            focusedStyle={{
+              border: "single",
+              borderColor: "blue",
+              paddingX: 2,
+              bold: true,
+            }}
+          >
+            <Text>Quit (q)</Text>
+          </Button>
+        </Box>
       </Box>
 
       <Box
@@ -121,10 +149,17 @@ function App() {
           bg: "blue",
         }}
       >
-        <Text style={{ color: "white", bold: true }}>
-          {showModal ? "Modal is open" : "Press 'm' for modal | 'q' to quit"}
+        <Text style={{ bold: true }}>
+          {showModal ? "Modal is open" : "TAB to navigate | ENTER to press | 'm' for modal | 'q' to quit"}
         </Text>
       </Box>
+
+      {!showModal && (
+        <>
+          <Keybind keypress="q" onPress={() => exit()} />
+          <Keybind keypress="m" onPress={() => setShowModal(true)} />
+        </>
+      )}
 
       {showModal && <Modal onClose={handleClose} />}
     </Box>

@@ -1,0 +1,19 @@
+{
+  "name": "menu-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/main.tsx",
+    "build": "echo 'no build needed'"
+  },
+  "dependencies": {
+    "glyph": "workspace:*",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "tsx": "^4",
+    "typescript": "^5.5"
+  }
+}

@@ -9,6 +9,7 @@ import { Framebuffer } from "./paint/framebuffer.js";
 import { paintTree } from "./paint/painter.js";
 import { diffFramebuffers } from "./paint/diff.js";
 import { computeLayout } from "./layout/yogaLayout.js";
+import { setTerminalPalette } from "./paint/color.js";
 import {
   InputContext,
   FocusContext,
@@ -17,12 +18,13 @@ import {
 } from "./hooks/context.js";
 import type {
   InputHandler,
+  FocusedInputHandler,
   InputContextValue,
   FocusContextValue,
   LayoutContextValue,
   AppContextValue,
 } from "./hooks/context.js";
-import type { RenderOptions, AppHandle, Key, LayoutRect } from "./types/index.js";
+import type { RenderOptions, AppHandle, LayoutRect } from "./types/index.js";
 
 export function render(
   element: ReactElement,
@@ -35,17 +37,29 @@ export function render(
   const terminal = new Terminal(stdout, stdin);
   terminal.setup();
 
+  // Query terminal for actual ANSI palette colors (async, repaint when done)
+  terminal.queryPalette().then((palette) => {
+    setTerminalPalette(palette);
+    fullRedraw = true;
+    scheduleRender();
+  });
+
   const prevFb = new Framebuffer(terminal.columns, terminal.rows);
   const currentFb = new Framebuffer(terminal.columns, terminal.rows);
   let fullRedraw = true;
 
   // ---- Input system ----
   const inputHandlers = new Set<InputHandler>();
+  const focusedInputHandlers = new Map<string, FocusedInputHandler>();
 
   const inputContextValue: InputContextValue = {
     subscribe(handler: InputHandler) {
       inputHandlers.add(handler);
       return () => inputHandlers.delete(handler);
+    },
+    registerInputHandler(focusId: string, handler: FocusedInputHandler) {
+      focusedInputHandlers.set(focusId, handler);
+      return () => focusedInputHandlers.delete(focusId);
     },
   };
 
@@ -54,6 +68,17 @@ export function render(
   const focusRegistry = new Map<string, GlyphNode>();
   const focusOrder: string[] = [];
   let trapStack: Array<Set<string>> = [];
+  const focusChangeHandlers = new Set<(id: string | null) => void>();
+
+  function setFocusedId(id: string | null): void {
+    if (focusedId !== id) {
+      focusedId = id;
+      scheduleRender();
+      for (const handler of focusChangeHandlers) {
+        handler(focusedId);
+      }
+    }
+  }
 
   function getActiveFocusableIds(): string[] {
     if (trapStack.length > 0) {
@@ -78,40 +103,33 @@ export function render(
       }
       // Auto-focus first item if nothing focused
       if (focusedId === null) {
-        focusedId = id;
-        scheduleRender();
+        setFocusedId(id);
       }
       return () => {
         focusRegistry.delete(id);
         const idx = focusOrder.indexOf(id);
         if (idx !== -1) focusOrder.splice(idx, 1);
         if (focusedId === id) {
-          focusedId = focusOrder[0] ?? null;
-          scheduleRender();
+          setFocusedId(focusOrder[0] ?? null);
         }
       };
     },
     requestFocus(id: string) {
-      if (focusedId !== id) {
-        focusedId = id;
-        scheduleRender();
-      }
+      setFocusedId(id);
     },
     focusNext() {
       const ids = getActiveFocusableIds();
       if (ids.length === 0) return;
       const currentIdx = focusedId ? ids.indexOf(focusedId) : -1;
       const nextIdx = (currentIdx + 1) % ids.length;
-      focusedId = ids[nextIdx]!;
-      scheduleRender();
+      setFocusedId(ids[nextIdx]!);
     },
     focusPrev() {
       const ids = getActiveFocusableIds();
       if (ids.length === 0) return;
       const currentIdx = focusedId ? ids.indexOf(focusedId) : 0;
       const prevIdx = (currentIdx - 1 + ids.length) % ids.length;
-      focusedId = ids[prevIdx]!;
-      scheduleRender();
+      setFocusedId(ids[prevIdx]!);
     },
     trapIds: null,
     pushTrap(ids: Set<string>) {
@@ -119,6 +137,12 @@ export function render(
       return () => {
         const idx = trapStack.indexOf(ids);
         if (idx !== -1) trapStack.splice(idx, 1);
+      };
+    },
+    onFocusChange(handler: (id: string | null) => void) {
+      focusChangeHandlers.add(handler);
+      return () => {
+        focusChangeHandlers.delete(handler);
       };
     },
   };
@@ -150,6 +174,15 @@ export function render(
     registerNode() {},
     unregisterNode() {},
     scheduleRender,
+    exit(code?: number) {
+      handle.exit(code);
+    },
+    get columns() {
+      return terminal.columns;
+    },
+    get rows() {
+      return terminal.rows;
+    },
   };
 
   // ---- Container ----
@@ -246,11 +279,23 @@ export function render(
         } else {
           focusContextValue.focusNext();
         }
+        continue;
       }
 
-      // Dispatch to handlers
-      for (const handler of inputHandlers) {
-        handler(key);
+      // If a text input is focused, let it consume the event first.
+      // If it returns true, skip useInput handlers.
+      let consumed = false;
+      if (focusedId) {
+        const inputHandler = focusedInputHandlers.get(focusedId);
+        if (inputHandler) {
+          consumed = inputHandler(key);
+        }
+      }
+
+      if (!consumed) {
+        for (const handler of inputHandlers) {
+          handler(key);
+        }
       }
     }
   });

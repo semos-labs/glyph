@@ -197,18 +197,28 @@ export function Input(props: InputProps): React.JSX.Element {
     });
   }, [layoutCtx]);
 
+  // Keep working value/cursor in refs that update SYNCHRONOUSLY 
+  // This prevents race conditions when typing faster than React renders
+  const workingValueRef = useRef(value);
+  const workingCursorRef = useRef(cursorPos);
+  
+  // Sync refs with React state when it updates
+  useEffect(() => {
+    workingValueRef.current = value;
+  }, [value]);
+  
+  useEffect(() => {
+    workingCursorRef.current = cursorPos;
+  }, [cursorPos]);
+
   // Keep a ref to current values so the handler closure always reads fresh state
   const stateRef = useRef({
-    value,
-    cursorPos,
     isControlled,
     onChange,
     multiline: multiline ?? false,
     innerWidth,
   });
   stateRef.current = {
-    value,
-    cursorPos,
     isControlled,
     onChange,
     multiline: multiline ?? false,
@@ -238,23 +248,37 @@ export function Input(props: InputProps): React.JSX.Element {
 
     const handler = (key: Key): boolean => {
       const {
-        value: val,
-        cursorPos: pos,
         isControlled: ctrl,
         onChange: cb,
         multiline: ml,
       } = stateRef.current;
+      
+      // Read from working refs (updated synchronously) to handle fast typing
+      const val = workingValueRef.current;
+      const pos = workingCursorRef.current;
 
       // Escape always passes through
       if (key.name === "escape") return false;
+
+      // Helper to update value and cursor synchronously
+      const updateValue = (newVal: string, newCursor: number) => {
+        workingValueRef.current = newVal;
+        workingCursorRef.current = newCursor;
+        if (!ctrl) setInternalValue(newVal);
+        cb?.(newVal);
+        setCursorPos(newCursor);
+      };
+      
+      const updateCursor = (newCursor: number) => {
+        workingCursorRef.current = newCursor;
+        setCursorPos(newCursor);
+      };
 
       // Return: pass through for single-line, insert newline for multiline
       if (key.name === "return") {
         if (ml) {
           const newVal = val.slice(0, pos) + "\n" + val.slice(pos);
-          if (!ctrl) setInternalValue(newVal);
-          cb?.(newVal);
-          setCursorPos(pos + 1);
+          updateValue(newVal, pos + 1);
           return true;
         }
         return false;
@@ -274,27 +298,25 @@ export function Input(props: InputProps): React.JSX.Element {
             )
               i--;
             const newVal = val.slice(0, i) + val.slice(pos);
-            if (!ctrl) setInternalValue(newVal);
-            cb?.(newVal);
-            setCursorPos(i);
+            updateValue(newVal, i);
           }
           return true;
         }
         if (key.name === "a") {
           if (ml) {
             const { line, lines } = cursorToLineCol(val, pos);
-            setCursorPos(lineColToCursor(lines, line, 0));
+            updateCursor(lineColToCursor(lines, line, 0));
           } else {
-            setCursorPos(0);
+            updateCursor(0);
           }
           return true;
         }
         if (key.name === "e") {
           if (ml) {
             const { line, lines } = cursorToLineCol(val, pos);
-            setCursorPos(lineColToCursor(lines, line, lines[line]!.length));
+            updateCursor(lineColToCursor(lines, line, lines[line]!.length));
           } else {
-            setCursorPos(val.length);
+            updateCursor(val.length);
           }
           return true;
         }
@@ -305,16 +327,12 @@ export function Input(props: InputProps): React.JSX.Element {
             const lineStart = lineColToCursor(lines, line, 0);
             if (pos > lineStart) {
               const newVal = val.slice(0, lineStart) + val.slice(pos);
-              if (!ctrl) setInternalValue(newVal);
-              cb?.(newVal);
-              setCursorPos(lineStart);
+              updateValue(newVal, lineStart);
             }
           } else {
             if (pos > 0) {
               const newVal = val.slice(pos);
-              if (!ctrl) setInternalValue(newVal);
-              cb?.(newVal);
-              setCursorPos(0);
+              updateValue(newVal, 0);
             }
           }
           return true;
@@ -326,14 +344,12 @@ export function Input(props: InputProps): React.JSX.Element {
             const lineEnd = lineColToCursor(lines, line, lines[line]!.length);
             if (pos < lineEnd) {
               const newVal = val.slice(0, pos) + val.slice(lineEnd);
-              if (!ctrl) setInternalValue(newVal);
-              cb?.(newVal);
+              updateValue(newVal, pos);
             }
           } else {
             if (pos < val.length) {
               const newVal = val.slice(0, pos);
-              if (!ctrl) setInternalValue(newVal);
-              cb?.(newVal);
+              updateValue(newVal, pos);
             }
           }
           return true;
@@ -351,7 +367,7 @@ export function Input(props: InputProps): React.JSX.Element {
           while (i > 0 && val[i - 1] === " ") i--;
           // Skip the word
           while (i > 0 && val[i - 1] !== " " && val[i - 1] !== "\n") i--;
-          setCursorPos(i);
+          updateCursor(i);
           return true;
         }
         if (key.name === "right" || key.name === "f") {
@@ -361,7 +377,7 @@ export function Input(props: InputProps): React.JSX.Element {
           while (i < val.length && val[i] !== " " && val[i] !== "\n") i++;
           // Skip spaces after word
           while (i < val.length && val[i] === " ") i++;
-          setCursorPos(i);
+          updateCursor(i);
           return true;
         }
         if (key.name === "backspace" || key.name === "d") {
@@ -372,9 +388,7 @@ export function Input(props: InputProps): React.JSX.Element {
               while (i > 0 && val[i - 1] === " ") i--;
               while (i > 0 && val[i - 1] !== " " && val[i - 1] !== "\n") i--;
               const newVal = val.slice(0, i) + val.slice(pos);
-              if (!ctrl) setInternalValue(newVal);
-              cb?.(newVal);
-              setCursorPos(i);
+              updateValue(newVal, i);
             }
             return true;
           } else {
@@ -384,8 +398,7 @@ export function Input(props: InputProps): React.JSX.Element {
               while (i < val.length && val[i] !== " " && val[i] !== "\n") i++;
               while (i < val.length && val[i] === " ") i++;
               const newVal = val.slice(0, pos) + val.slice(i);
-              if (!ctrl) setInternalValue(newVal);
-              cb?.(newVal);
+              updateValue(newVal, pos);
             }
             return true;
           }
@@ -397,11 +410,11 @@ export function Input(props: InputProps): React.JSX.Element {
       // ── Navigation ──────────────────────────────────────────
 
       if (key.name === "left") {
-        setCursorPos((p) => Math.max(0, p - 1));
+        updateCursor(Math.max(0, pos - 1));
         return true;
       }
       if (key.name === "right") {
-        setCursorPos((p) => Math.min(val.length, p + 1));
+        updateCursor(Math.min(val.length, pos + 1));
         return true;
       }
       if (key.name === "up") {
@@ -409,7 +422,7 @@ export function Input(props: InputProps): React.JSX.Element {
         // Use visual line navigation (accounts for word wrapping)
         const info = cursorToVisualLine(val, pos, w);
         if (info.visualLine > 0) {
-          setCursorPos(visualLineToCursor(val, info.visualLine - 1, info.visualCol, w));
+          updateCursor(visualLineToCursor(val, info.visualLine - 1, info.visualCol, w));
         }
         return true;
       }
@@ -418,25 +431,25 @@ export function Input(props: InputProps): React.JSX.Element {
         // Use visual line navigation (accounts for word wrapping)
         const info = cursorToVisualLine(val, pos, w);
         if (info.visualLine < info.totalVisualLines - 1) {
-          setCursorPos(visualLineToCursor(val, info.visualLine + 1, info.visualCol, w));
+          updateCursor(visualLineToCursor(val, info.visualLine + 1, info.visualCol, w));
         }
         return true;
       }
       if (key.name === "home") {
         if (ml) {
           const { line, lines } = cursorToLineCol(val, pos);
-          setCursorPos(lineColToCursor(lines, line, 0));
+          updateCursor(lineColToCursor(lines, line, 0));
         } else {
-          setCursorPos(0);
+          updateCursor(0);
         }
         return true;
       }
       if (key.name === "end") {
         if (ml) {
           const { line, lines } = cursorToLineCol(val, pos);
-          setCursorPos(lineColToCursor(lines, line, lines[line]!.length));
+          updateCursor(lineColToCursor(lines, line, lines[line]!.length));
         } else {
-          setCursorPos(val.length);
+          updateCursor(val.length);
         }
         return true;
       }
@@ -446,17 +459,14 @@ export function Input(props: InputProps): React.JSX.Element {
       if (key.name === "backspace") {
         if (pos > 0) {
           const newVal = val.slice(0, pos - 1) + val.slice(pos);
-          if (!ctrl) setInternalValue(newVal);
-          cb?.(newVal);
-          setCursorPos((p) => Math.max(0, p - 1));
+          updateValue(newVal, pos - 1);
         }
         return true;
       }
       if (key.name === "delete") {
         if (pos < val.length) {
           const newVal = val.slice(0, pos) + val.slice(pos + 1);
-          if (!ctrl) setInternalValue(newVal);
-          cb?.(newVal);
+          updateValue(newVal, pos);
         }
         return true;
       }
@@ -468,9 +478,7 @@ export function Input(props: InputProps): React.JSX.Element {
       const ch = key.sequence;
       if (ch.length === 1 && ch.charCodeAt(0) >= 32) {
         const newVal = val.slice(0, pos) + ch + val.slice(pos);
-        if (!ctrl) setInternalValue(newVal);
-        cb?.(newVal);
-        setCursorPos((p) => p + 1);
+        updateValue(newVal, pos + 1);
         return true;
       }
 

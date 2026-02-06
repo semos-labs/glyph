@@ -70,6 +70,18 @@ export class Terminal {
     this.write(`${CSI}${y + 1};${x + 1}H`);
   }
 
+  /** Set cursor color using OSC 12 */
+  setCursorColor(color: string): void {
+    // OSC 12 sets cursor color, terminated by BEL
+    this.write(`${ESC}]12;${color}\x07`);
+  }
+
+  /** Reset cursor color to terminal default */
+  resetCursorColor(): void {
+    // Empty color resets to default
+    this.write(`${ESC}]112\x07`);
+  }
+
   enterAltScreen(): void {
     this.write(`${CSI}?1049h`);
   }
@@ -105,6 +117,7 @@ export class Terminal {
     }
 
     this.resetStyles();
+    this.resetCursorColor();
     this.showCursor();
     this.exitAltScreen();
     this.exitRawMode();
@@ -120,6 +133,7 @@ export class Terminal {
     this.oscAccum = "";
 
     this.resetStyles();
+    this.resetCursorColor();
     this.showCursor();
     this.exitAltScreen();
     this.exitRawMode();

@@ -24,6 +24,8 @@ interface PaintEntry {
 export interface CursorScreenPosition {
   x: number;
   y: number;
+  /** Background color at cursor position for contrast calculation */
+  bg?: Color;
 }
 
 export interface PaintOptions {
@@ -365,7 +367,7 @@ function paintInput(
         if (isInClip(cursorX, cursorY, clip) && cursorX < innerX + innerWidth) {
           if (useNativeCursor) {
             // Return cursor position for native cursor positioning
-            result = { cursorPosition: { x: cursorX, y: cursorY } };
+            result = { cursorPosition: { x: cursorX, y: cursorY, bg: inherited.bg } };
           } else {
             // Paint simulated cursor
             const existing = fb.get(cursorX, cursorY);
@@ -409,7 +411,7 @@ function paintInput(
       if (isInClip(cursorX, innerY, clip) && cursorX < innerX + innerWidth) {
         if (useNativeCursor) {
           // Return cursor position for native cursor positioning
-          result = { cursorPosition: { x: cursorX, y: innerY } };
+          result = { cursorPosition: { x: cursorX, y: innerY, bg: inherited.bg } };
         } else {
           // Paint simulated cursor
           const existing = fb.get(cursorX, innerY);

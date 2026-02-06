@@ -191,3 +191,24 @@ export function colorsEqual(
   }
   return false;
 }
+
+/** Convert Color to a string suitable for OSC sequences (e.g. cursor color) */
+export function colorToOscString(color: Color): string {
+  const rgb = colorToRgb(color);
+  if (rgb) {
+    const [r, g, b] = rgb;
+    // OSC uses "rgb:RR/GG/BB" format with hex values
+    const rHex = r.toString(16).padStart(2, "0");
+    const gHex = g.toString(16).padStart(2, "0");
+    const bHex = b.toString(16).padStart(2, "0");
+    return `rgb:${rHex}/${gHex}/${bHex}`;
+  }
+  // Fallback to named color string
+  return String(color);
+}
+
+/** Get a contrasting cursor color for a given background */
+export function getContrastCursorColor(bg: Color | undefined): string {
+  if (!bg) return "white";
+  return isLightColor(bg) ? "black" : "white";
+}

@@ -9,7 +9,7 @@ import { Framebuffer } from "./paint/framebuffer.js";
 import { paintTree } from "./paint/painter.js";
 import { diffFramebuffers } from "./paint/diff.js";
 import { computeLayout } from "./layout/yogaLayout.js";
-import { setTerminalPalette } from "./paint/color.js";
+import { setTerminalPalette, getContrastCursorColor } from "./paint/color.js";
 import {
   InputContext,
   FocusContext,
@@ -253,6 +253,9 @@ export function render(
     // Handle native cursor positioning
     if (useNativeCursor) {
       if (paintResult.cursorPosition) {
+        // Set cursor color to contrast with input background
+        const cursorColor = getContrastCursorColor(paintResult.cursorPosition.bg);
+        terminal.setCursorColor(cursorColor);
         // Position and show native cursor
         terminal.moveCursor(paintResult.cursorPosition.x, paintResult.cursorPosition.y);
         if (!nativeCursorVisible) {

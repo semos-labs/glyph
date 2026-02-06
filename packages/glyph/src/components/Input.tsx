@@ -337,23 +337,6 @@ export function Input(props: InputProps): React.JSX.Element {
           }
           return true;
         }
-        if (key.name === "u") {
-          // Delete from cursor to start of line
-          if (ml) {
-            const { line, lines } = cursorToLineCol(val, pos);
-            const lineStart = lineColToCursor(lines, line, 0);
-            if (pos > lineStart) {
-              const newVal = val.slice(0, lineStart) + val.slice(pos);
-              updateValue(newVal, lineStart);
-            }
-          } else {
-            if (pos > 0) {
-              const newVal = val.slice(pos);
-              updateValue(newVal, 0);
-            }
-          }
-          return true;
-        }
         if (key.name === "k") {
           // Delete from cursor to end of line
           if (ml) {

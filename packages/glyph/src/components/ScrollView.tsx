@@ -137,15 +137,11 @@ export function ScrollView({
         // Ctrl combinations that don't conflict with input editing
         if (key.ctrl) {
           if (key.name === "d") {
-            // Ctrl+D - half page down (inputs don't use this)
+            // Ctrl+D - half page down
             setOffset(offset + halfPage);
           } else if (key.name === "u") {
-            // Ctrl+U - half page up 
-            // Note: conflicts with input's "delete to line start"
-            // Only scroll if Shift is also held
-            if (key.shift) {
-              setOffset(offset - halfPage);
-            }
+            // Ctrl+U - half page up
+            setOffset(offset - halfPage);
           } else if (key.name === "f") {
             // Ctrl+F - full page down
             setOffset(offset + fullPage);

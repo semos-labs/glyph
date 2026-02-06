@@ -23,6 +23,10 @@ export interface ScrollViewProps {
   scrollToFocus?: boolean;
   /** Show scrollbar when content is scrollable (default: true) */
   showScrollbar?: boolean;
+  /** Make ScrollView itself focusable. Default: true. Set to false if you want scroll to follow child focus only. */
+  focusable?: boolean;
+  /** Style applied when ScrollView is focused */
+  focusedStyle?: Style;
 }
 
 export function ScrollView({
@@ -35,6 +39,8 @@ export function ScrollView({
   disableKeyboard,
   scrollToFocus = true,
   showScrollbar = true,
+  focusable = true,
+  focusedStyle,
 }: ScrollViewProps): React.JSX.Element {
   const isControlled = controlledOffset !== undefined;
   const [internalOffset, setInternalOffset] = useState(defaultScrollOffset);
@@ -47,6 +53,22 @@ export function ScrollView({
   
   const focusCtx = useContext(FocusContext);
   const layoutCtx = useContext(LayoutContext);
+
+  // Generate stable focus ID for this ScrollView if focusable
+  const focusIdRef = useRef<string | null>(null);
+  if (focusable && !focusIdRef.current) {
+    focusIdRef.current = `scrollview-${Math.random().toString(36).slice(2, 9)}`;
+  }
+  const focusId = focusable ? focusIdRef.current : null;
+
+  // Register with focus system if focusable
+  useEffect(() => {
+    if (!focusable || !focusId || !focusCtx || !viewportRef.current) return;
+    return focusCtx.register(focusId, viewportRef.current);
+  }, [focusable, focusId, focusCtx]);
+
+  // Check if this ScrollView is directly focused
+  const isSelfFocused = focusable && focusId && focusCtx?.focusedId === focusId;
 
   const viewportHeight = viewportLayout.innerHeight;
   const contentHeight = contentLayout.height;
@@ -116,8 +138,34 @@ export function ScrollView({
     return unsubscribe;
   }, [scrollToFocus, focusCtx, layoutCtx, offset, viewportHeight, setOffset]);
 
+  // Check if this ScrollView contains the currently focused element (or is itself focused)
+  const containsFocus = useCallback((): boolean => {
+    if (!focusCtx) return false;
+    const currentFocusId = focusCtx.focusedId;
+    if (!currentFocusId) return false;
+
+    // Check if ScrollView itself is focused
+    if (focusable && focusId && currentFocusId === focusId) return true;
+
+    // Walk the content tree to find if focused element is inside
+    if (!contentRef.current) return false;
+    const findNode = (node: GlyphNode): boolean => {
+      if (node.focusId === currentFocusId) return true;
+      for (const child of node.children) {
+        if (findNode(child)) return true;
+      }
+      return false;
+    };
+
+    return findNode(contentRef.current);
+  }, [focusCtx, focusable, focusId]);
+
   useInput((key: Key) => {
     if (disableKeyboard) return;
+
+    // Only respond to scroll keys if this ScrollView contains focus
+    // This prevents multiple ScrollViews from all scrolling at once
+    if (!containsFocus()) return;
 
     const halfPage = Math.max(1, Math.floor(viewportHeight / 2));
     const fullPage = Math.max(1, viewportHeight);
@@ -152,7 +200,7 @@ export function ScrollView({
         }
         break;
     }
-  }, [offset, scrollStep, viewportHeight, maxOffset, disableKeyboard, setOffset]);
+  }, [offset, scrollStep, viewportHeight, maxOffset, disableKeyboard, setOffset, containsFocus]);
 
   // Extract padding from the user style — it must live on the inner content
   // wrapper, not the outer viewport.  The clip region is the outer box's
@@ -172,8 +220,10 @@ export function ScrollView({
   } = style ?? {};
 
   // Outer viewport: user styles (minus padding) + clip.
+  // Apply focusedStyle when ScrollView is directly focused.
   const outerStyle: Style = {
     ...styleRest,
+    ...(isSelfFocused ? focusedStyle : {}),
     clip: true,
   };
 
@@ -235,6 +285,7 @@ export function ScrollView({
       ref: (node: any) => {
         viewportRef.current = node ?? null;
       },
+      ...(focusable ? { focusable: true, focusId } : {}),
     },
     // Content
     React.createElement(

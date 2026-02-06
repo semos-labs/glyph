@@ -207,6 +207,16 @@ Scrollable container with keyboard navigation and clipping.
 
 Shows a scrollbar when content exceeds viewport (disable with `showScrollbar={false}`). Supports controlled mode with `scrollOffset` and `onScroll` props.
 
+**Focus-aware scrolling:** ScrollView is focusable by default and responds to scroll keys when focused (or when it contains the focused element). This prevents multiple ScrollViews from scrolling simultaneously — only the one with focus responds.
+
+Set `focusable={false}` if you want the ScrollView to only scroll when a child element has focus:
+
+```tsx
+<ScrollView focusable={false} style={{ flexGrow: 1 }}>
+  <Input ... />  {/* ScrollView scrolls only when Input is focused */}
+</ScrollView>
+```
+
 ### `<List>`
 
 Keyboard-navigable selection list with a render callback.

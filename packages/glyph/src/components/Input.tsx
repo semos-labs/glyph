@@ -156,6 +156,8 @@ export interface InputProps {
   value?: string;
   defaultValue?: string;
   onChange?: (value: string) => void;
+  /** Called on every key press. Return `true` to prevent default handling. */
+  onKeyPress?: (key: Key) => boolean | void;
   placeholder?: string;
   style?: Style;
   /** Style when focused (merged with style) */
@@ -169,6 +171,7 @@ export function Input(props: InputProps): React.JSX.Element {
     value: controlledValue,
     defaultValue = "",
     onChange,
+    onKeyPress,
     placeholder,
     style,
     focusedStyle,
@@ -203,8 +206,14 @@ export function Input(props: InputProps): React.JSX.Element {
   const workingCursorRef = useRef(cursorPos);
   
   // Sync refs with React state when it updates
+  // Also clamp cursor when value changes externally (e.g., cleared)
   useEffect(() => {
     workingValueRef.current = value;
+    // If cursor is beyond the new value length, clamp it
+    if (workingCursorRef.current > value.length) {
+      workingCursorRef.current = value.length;
+      setCursorPos(value.length);
+    }
   }, [value]);
   
   useEffect(() => {
@@ -215,12 +224,14 @@ export function Input(props: InputProps): React.JSX.Element {
   const stateRef = useRef({
     isControlled,
     onChange,
+    onKeyPress,
     multiline: multiline ?? false,
     innerWidth,
   });
   stateRef.current = {
     isControlled,
     onChange,
+    onKeyPress,
     multiline: multiline ?? false,
     innerWidth,
   };
@@ -250,8 +261,14 @@ export function Input(props: InputProps): React.JSX.Element {
       const {
         isControlled: ctrl,
         onChange: cb,
+        onKeyPress: onKey,
         multiline: ml,
       } = stateRef.current;
+      
+      // Call onKeyPress callback first - if it returns true, prevent default handling
+      if (onKey?.(key) === true) {
+        return true;
+      }
       
       // Read from working refs (updated synchronously) to handle fast typing
       const val = workingValueRef.current;

@@ -488,10 +488,36 @@ const app = render(<App />, {
   stdout: process.stdout,
   stdin: process.stdin,
   debug: false,
+  useNativeCursor: true, // Use terminal's native cursor (default: true)
 });
 
 app.unmount(); // Tear down
 app.exit();    // Unmount and exit process
+```
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `stdout` | `NodeJS.WriteStream` | `process.stdout` | Output stream |
+| `stdin` | `NodeJS.ReadStream` | `process.stdin` | Input stream |
+| `debug` | `boolean` | `false` | Enable debug logging |
+| `useNativeCursor` | `boolean` | `true` | Use terminal's native cursor instead of simulated one |
+
+### Native Cursor
+
+By default, Glyph uses the terminal's native cursor, which enables:
+
+- **Cursor shaders** in terminals that support them (e.g., Ghostty)
+- **Custom cursor shapes** (block, beam, underline) from terminal settings
+- **Cursor animations** and blinking behavior
+
+The native cursor is automatically shown when an input is focused and hidden otherwise.
+
+To use the simulated cursor instead (inverted colors, no shader support):
+
+```tsx
+render(<App />, { useNativeCursor: false });
 ```
 
 ---

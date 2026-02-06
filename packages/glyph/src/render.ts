@@ -33,9 +33,13 @@ export function render(
   const stdout = opts.stdout ?? process.stdout;
   const stdin = opts.stdin ?? process.stdin;
   const debug = opts.debug ?? false;
+  const useNativeCursor = opts.useNativeCursor ?? true;
 
   const terminal = new Terminal(stdout, stdin);
   terminal.setup();
+
+  // Track whether native cursor is currently visible
+  let nativeCursorVisible = false;
 
   // Query terminal for actual ANSI palette colors (async, repaint when done)
   terminal.queryPalette().then((palette) => {
@@ -235,12 +239,33 @@ export function render(
     }
 
     // Paint
-    paintTree(container.children, currentFb, cursorInfo);
+    const paintResult = paintTree(container.children, currentFb, {
+      cursorInfo,
+      useNativeCursor,
+    });
 
     // Diff & flush
     const output = diffFramebuffers(prevFb, currentFb, fullRedraw);
     if (output.length > 0) {
       terminal.write(output);
+    }
+
+    // Handle native cursor positioning
+    if (useNativeCursor) {
+      if (paintResult.cursorPosition) {
+        // Position and show native cursor
+        terminal.moveCursor(paintResult.cursorPosition.x, paintResult.cursorPosition.y);
+        if (!nativeCursorVisible) {
+          terminal.showCursor();
+          nativeCursorVisible = true;
+        }
+      } else {
+        // No focused input - hide native cursor
+        if (nativeCursorVisible) {
+          terminal.hideCursor();
+          nativeCursorVisible = false;
+        }
+      }
     }
 
     // Swap buffers

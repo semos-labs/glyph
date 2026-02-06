@@ -64,6 +64,12 @@ export class Terminal {
     this.write(`${CSI}?25h`);
   }
 
+  /** Move cursor to (x, y) position (0-indexed) */
+  moveCursor(x: number, y: number): void {
+    // ANSI uses 1-indexed positions
+    this.write(`${CSI}${y + 1};${x + 1}H`);
+  }
+
   enterAltScreen(): void {
     this.write(`${CSI}?1049h`);
   }

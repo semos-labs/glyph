@@ -109,6 +109,8 @@ export interface RenderOptions {
   stdout?: NodeJS.WriteStream;
   stdin?: NodeJS.ReadStream;
   debug?: boolean;
+  /** Use the terminal's native cursor instead of a simulated one. Enables cursor shaders/animations in supported terminals. Default: true */
+  useNativeCursor?: boolean;
 }
 
 export interface AppHandle {

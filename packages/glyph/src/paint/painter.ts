@@ -21,12 +21,30 @@ interface PaintEntry {
   zIndex: number;
 }
 
+export interface CursorScreenPosition {
+  x: number;
+  y: number;
+}
+
+export interface PaintOptions {
+  cursorInfo?: { nodeId: string; position: number };
+  /** If true, don't paint the cursor and return its screen position instead */
+  useNativeCursor?: boolean;
+}
+
+export interface PaintResult {
+  /** Cursor screen position if useNativeCursor is true and an input is focused */
+  cursorPosition?: CursorScreenPosition;
+}
+
 export function paintTree(
   roots: GlyphNode[],
   fb: Framebuffer,
-  cursorInfo?: { nodeId: string; position: number },
-): void {
+  options: PaintOptions = {},
+): PaintResult {
   fb.clear();
+
+  const result: PaintResult = {};
 
   // Collect all nodes with their z-index for proper ordering
   const entries: PaintEntry[] = [];
@@ -42,8 +60,14 @@ export function paintTree(
 
   // Paint each entry
   for (const entry of entries) {
-    paintNode(entry.node, fb, entry.clip, cursorInfo);
+    const nodeResult = paintNode(entry.node, fb, entry.clip, options);
+    // Capture cursor position from the focused input
+    if (nodeResult?.cursorPosition) {
+      result.cursorPosition = nodeResult.cursorPosition;
+    }
   }
+
+  return result;
 }
 
 function collectPaintEntries(
@@ -95,8 +119,8 @@ function paintNode(
   node: GlyphNode,
   fb: Framebuffer,
   clip: ClipRect,
-  cursorInfo?: { nodeId: string; position: number },
-): void {
+  options: PaintOptions = {},
+): PaintResult | undefined {
   const { x, y, width, height, innerX, innerY, innerWidth, innerHeight } = node.layout;
   const style = node.style;
 
@@ -148,8 +172,10 @@ function paintNode(
   if (node.type === "text") {
     paintText(node, fb, clip);
   } else if (node.type === "input") {
-    paintInput(node, fb, clip, cursorInfo);
+    return paintInput(node, fb, clip, options);
   }
+
+  return undefined;
 }
 
 function setClipped(
@@ -224,8 +250,9 @@ function paintInput(
   node: GlyphNode,
   fb: Framebuffer,
   clip: ClipRect,
-  cursorInfo?: { nodeId: string; position: number },
-): void {
+  options: PaintOptions = {},
+): PaintResult | undefined {
+  const { cursorInfo, useNativeCursor } = options;
   const { innerX, innerY, innerWidth, innerHeight } = node.layout;
   if (innerWidth <= 0 || innerHeight <= 0) return;
 
@@ -249,6 +276,9 @@ function paintInput(
   // Force dim for placeholder text to make it visually distinct
   const textDim = isPlaceholder ? true : inherited.dim;
 
+  const isFocused = cursorInfo && cursorInfo.nodeId === node.focusId;
+  let result: PaintResult | undefined;
+
   if (multiline && !isPlaceholder) {
     // ── Multiline rendering with wrapping ─────────────────────
     const wrapMode = node.style.wrap ?? "wrap";
@@ -258,7 +288,7 @@ function paintInput(
     // Convert flat cursor position to screen (wrappedLine, col)
     let cursorScreenLine = 0;
     let cursorScreenCol = 0;
-    if (cursorInfo && cursorInfo.nodeId === node.focusId) {
+    if (isFocused) {
       const pos = cursorInfo.position;
       
       // Find which logical line the cursor is on
@@ -325,27 +355,32 @@ function paintInput(
       }
     }
 
-    // Cursor - always show when focused
-    if (cursorInfo && cursorInfo.nodeId === node.focusId) {
+    // Cursor handling
+    if (isFocused) {
       const screenRow = cursorScreenLine - scrollOffset;
       if (screenRow >= 0 && screenRow < innerHeight) {
         const cCol = Math.min(cursorScreenCol, innerWidth - 1);
         const cursorX = innerX + cCol;
         const cursorY = innerY + screenRow;
         if (isInClip(cursorX, cursorY, clip) && cursorX < innerX + innerWidth) {
-          const existing = fb.get(cursorX, cursorY);
-          // Use block cursor with inverted colors for visibility
-          const cursorChar = existing?.ch && existing.ch !== " " ? existing.ch : "▌";
-          const cursorFg = inherited.bg ?? "black";
-          const cursorBg = inherited.color ?? "white";
-          fb.setChar(
-            cursorX, cursorY,
-            cursorChar,
-            cursorFg,
-            cursorBg,
-            existing?.bold, existing?.dim, existing?.italic,
-            false,
-          );
+          if (useNativeCursor) {
+            // Return cursor position for native cursor positioning
+            result = { cursorPosition: { x: cursorX, y: cursorY } };
+          } else {
+            // Paint simulated cursor
+            const existing = fb.get(cursorX, cursorY);
+            const cursorChar = existing?.ch && existing.ch !== " " ? existing.ch : "▌";
+            const cursorFg = inherited.bg ?? "black";
+            const cursorBg = inherited.color ?? "white";
+            fb.setChar(
+              cursorX, cursorY,
+              cursorChar,
+              cursorFg,
+              cursorBg,
+              existing?.bold, existing?.dim, existing?.italic,
+              false,
+            );
+          }
         }
       }
     }
@@ -367,25 +402,32 @@ function paintInput(
       col += charWidth;
     }
 
-    // Cursor - always show when focused
-    if (cursorInfo && cursorInfo.nodeId === node.focusId) {
+    // Cursor handling
+    if (isFocused) {
       const cursorCol = Math.min(cursorInfo.position, innerWidth - 1);
       const cursorX = innerX + cursorCol;
       if (isInClip(cursorX, innerY, clip) && cursorX < innerX + innerWidth) {
-        const existing = fb.get(cursorX, innerY);
-        // Use block cursor with inverted colors for visibility
-        const cursorChar = existing?.ch && existing.ch !== " " ? existing.ch : "▌";
-        const cursorFg = inherited.bg ?? "black";
-        const cursorBg = inherited.color ?? "white";
-        fb.setChar(
-          cursorX, innerY,
-          cursorChar,
-          cursorFg,
-          cursorBg,
-          existing?.bold, existing?.dim, existing?.italic,
-          false,
-        );
+        if (useNativeCursor) {
+          // Return cursor position for native cursor positioning
+          result = { cursorPosition: { x: cursorX, y: innerY } };
+        } else {
+          // Paint simulated cursor
+          const existing = fb.get(cursorX, innerY);
+          const cursorChar = existing?.ch && existing.ch !== " " ? existing.ch : "▌";
+          const cursorFg = inherited.bg ?? "black";
+          const cursorBg = inherited.color ?? "white";
+          fb.setChar(
+            cursorX, innerY,
+            cursorChar,
+            cursorFg,
+            cursorBg,
+            existing?.bold, existing?.dim, existing?.italic,
+            false,
+          );
+        }
       }
     }
   }
+
+  return result;
 }

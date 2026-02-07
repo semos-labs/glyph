@@ -255,14 +255,14 @@ export function ScrollView({
     flexDirection: "column" as const,
   };
   
-  // Sizer establishes the intrinsic height. 
-  // - flexGrow: 1 (or user value) makes it fill available space
-  // - maxHeight: contentHeight caps it so it doesn't grow beyond content
-  // - flexShrink: 1 allows it to shrink when parent is constrained
+  // Sizer establishes the intrinsic height based on content.
+  // - height: intrinsicHeight gives the ScrollView its natural size
+  // - flexGrow is passed through so it can still grow to fill extra space
+  // - flexShrink: 1 allows it to shrink when parent is constrained (e.g., maxHeight)
   // - minHeight: 0 allows shrinking to 0 if needed
   const sizerStyle: Style = {
-    flexGrow: styleRest.flexGrow ?? 1, // Default to grow
-    maxHeight: intrinsicHeight,
+    height: intrinsicHeight ?? 0,
+    flexGrow: styleRest.flexGrow,
     flexShrink: styleRest.flexShrink ?? 1,
     minHeight: styleRest.minHeight ?? 0,
   };

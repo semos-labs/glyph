@@ -234,14 +234,37 @@ export function ScrollView({
   const borderHeight = hasBorder ? 2 : 0; // top + bottom border
   const intrinsicHeight = contentHeight > 0 ? contentHeight + borderHeight : undefined;
   
+  // ScrollView sizing strategy:
+  // 
+  // The challenge: with absolute-positioned content, the viewport has no intrinsic height.
+  // We need a way to establish height based on content, while still respecting flex constraints.
+  //
+  // Solution: Use a "sizer" box that's positioned normally (not absolute) to contribute
+  // height to the layout. The sizer has the content height and can shrink with flexShrink.
+  // The actual content is still absolute-positioned for scrolling.
+  //
+  // This gives us:
+  // - Short content: viewport hugs content (sizer establishes height)
+  // - Long content in constrained parent: sizer shrinks, scrolling kicks in
+  // - flexGrow works: sizer can grow to fill extra space
+  
   const outerStyle: Style = {
     ...styleRest,
     ...(isSelfFocused ? focusedStyle : {}),
     clip: true,
-    // Only set intrinsic height if user didn't specify explicit height or flexGrow
-    ...(styleRest.height === undefined && styleRest.flexGrow === undefined && intrinsicHeight !== undefined
-      ? { height: intrinsicHeight, flexShrink: styleRest.flexShrink ?? 1, minHeight: styleRest.minHeight ?? 0 }
-      : {}),
+    flexDirection: "column" as const,
+  };
+  
+  // Sizer establishes the intrinsic height. 
+  // - flexGrow: 1 (or user value) makes it fill available space
+  // - maxHeight: contentHeight caps it so it doesn't grow beyond content
+  // - flexShrink: 1 allows it to shrink when parent is constrained
+  // - minHeight: 0 allows shrinking to 0 if needed
+  const sizerStyle: Style = {
+    flexGrow: styleRest.flexGrow ?? 1, // Default to grow
+    maxHeight: intrinsicHeight,
+    flexShrink: styleRest.flexShrink ?? 1,
+    minHeight: styleRest.minHeight ?? 0,
   };
 
   // Inner content: absolutely positioned to fill viewport width,
@@ -304,6 +327,9 @@ export function ScrollView({
       },
       ...(focusable ? { focusable: true, focusId } : {}),
     },
+    // Sizer: establishes the viewport's intrinsic height based on content.
+    // Can grow (flexGrow) and shrink (flexShrink) to fit in constrained layouts.
+    React.createElement("box" as any, { style: sizerStyle }),
     // Content (absolutely positioned, scrolls via top offset)
     React.createElement(
       "box" as any,

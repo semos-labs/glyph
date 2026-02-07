@@ -246,9 +246,15 @@ export function Input(props: InputProps): React.JSX.Element {
   }, [focusCtx]);
 
   // Auto-focus on mount if requested
+  // Use microtask to ensure this runs AFTER all registrations in the same render cycle
+  const autoFocusedRef = useRef(false);
   useEffect(() => {
-    if (autoFocus && focusCtx && focusIdRef.current) {
-      focusCtx.requestFocus(focusIdRef.current);
+    if (autoFocus && !autoFocusedRef.current && focusCtx && focusIdRef.current) {
+      autoFocusedRef.current = true;
+      const fid = focusIdRef.current;
+      queueMicrotask(() => {
+        focusCtx.requestFocus(fid);
+      });
     }
   }, [autoFocus, focusCtx]);
 

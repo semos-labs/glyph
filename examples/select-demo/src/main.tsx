@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   render,
   Box,
@@ -42,11 +42,30 @@ const THEMES = [
   { label: "Tokyo Night", value: "tokyo-night" },
 ];
 
+const DYNAMIC_ITEMS = [
+  { label: "Option A", value: "a" },
+  { label: "Option B", value: "b" },
+  { label: "Option C", value: "c" },
+];
+
 function App() {
   const { exit } = useApp();
   const [lang, setLang] = useState<string | undefined>(undefined);
   const [editor, setEditor] = useState<string | undefined>(undefined);
   const [theme, setTheme] = useState<string | undefined>(undefined);
+  
+  // Dynamic items - starts empty, loads after 2 seconds
+  const [dynamicItems, setDynamicItems] = useState<typeof DYNAMIC_ITEMS>([]);
+  const [dynamicValue, setDynamicValue] = useState<string | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDynamicItems(DYNAMIC_ITEMS);
+      setIsLoading(false);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <Box
@@ -104,6 +123,21 @@ function App() {
             highlightColor="magenta"
           />
         </Box>
+
+        <Box style={{ flexDirection: "column", gap: 1, width: 25 }}>
+          <Text style={{ bold: true, color: "red" }}>
+            Dynamic {isLoading ? "(loading...)" : "(loaded)"}
+          </Text>
+          <Select
+            items={dynamicItems}
+            value={dynamicValue}
+            onChange={setDynamicValue}
+            placeholder={isLoading ? "Loading..." : "Pick one..."}
+            style={{ borderColor: "red" }}
+            focusedStyle={{ borderColor: "redBright" }}
+            highlightColor="red"
+          />
+        </Box>
       </Box>
 
       <Box style={{ flexDirection: "column", gap: 0 }}>
@@ -111,7 +145,8 @@ function App() {
         <Text>
           {lang ? `Language: ${lang}` : "Language: (none)"} |{" "}
           {editor ? `Editor: ${editor}` : "Editor: (none)"} |{" "}
-          {theme ? `Theme: ${theme}` : "Theme: (none)"}
+          {theme ? `Theme: ${theme}` : "Theme: (none)"} |{" "}
+          {dynamicValue ? `Dynamic: ${dynamicValue}` : "Dynamic: (none)"}
         </Text>
       </Box>
 

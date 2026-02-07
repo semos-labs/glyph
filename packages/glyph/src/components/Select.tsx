@@ -106,11 +106,10 @@ export function Select({
   }, [isFocused, isOpen]);
 
   // --- Focus registration ---
-  // Use layout effect to ensure refs are set before registration
-  React.useLayoutEffect(() => {
+  useEffect(() => {
     if (!focusCtx || !focusIdRef.current || !nodeRef.current || disabled) return;
     return focusCtx.register(focusIdRef.current, nodeRef.current);
-  });
+  }, [focusCtx, disabled]);
 
   useEffect(() => {
     if (!focusCtx || !focusIdRef.current) return;
@@ -482,8 +481,8 @@ export function Select({
         style: triggerStyle,
         focusable: !disabled,
         ref: (node: any) => {
-          nodeRef.current = node ?? null;
           if (node) {
+            nodeRef.current = node;
             focusIdRef.current = node.focusId;
           }
         },

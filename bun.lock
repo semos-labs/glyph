@@ -35,6 +35,19 @@
         "typescript": "^5.5",
       },
     },
+    "examples/dialog-demo": {
+      "name": "dialog-demo",
+      "dependencies": {
+        "@nick-skriabin/glyph": "workspace:*",
+        "react": "^19.0.0",
+      },
+      "devDependencies": {
+        "@types/node": "^20",
+        "@types/react": "^19",
+        "tsx": "^4",
+        "typescript": "^5.5",
+      },
+    },
     "examples/forms-demo": {
       "name": "forms-demo",
       "dependencies": {
@@ -306,6 +319,8 @@
     "dashboard": ["dashboard@workspace:examples/dashboard"],
 
     "debug": ["debug@4.4.3", "", { "dependencies": { "ms": "2.1.3" } }, "sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA=="],
+
+    "dialog-demo": ["dialog-demo@workspace:examples/dialog-demo"],
 
     "emoji-regex": ["emoji-regex@10.6.0", "", {}, "sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A=="],
 

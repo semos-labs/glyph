@@ -36,6 +36,8 @@ export { Checkbox } from "./components/Checkbox.js";
 export type { CheckboxProps } from "./components/Checkbox.js";
 export { Radio } from "./components/Radio.js";
 export type { RadioProps, RadioItem } from "./components/Radio.js";
+export { DialogHost, useDialog } from "./components/Dialog.js";
+export type { DialogHostProps, AlertOptions, ConfirmOptions, DialogContextValue } from "./components/Dialog.js";
 
 // Hooks
 export { useInput } from "./hooks/useInput.js";

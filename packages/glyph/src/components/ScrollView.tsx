@@ -224,10 +224,12 @@ export function ScrollView({
 
   // Outer viewport: user styles (minus padding) + clip.
   // Apply focusedStyle when ScrollView is directly focused.
+  // Use flexDirection: column so the spacer contributes to height.
   const outerStyle: Style = {
     ...styleRest,
     ...(isSelfFocused ? focusedStyle : {}),
     clip: true,
+    flexDirection: "column" as const,
   };
 
   // Inner content: absolutely positioned to fill viewport width,
@@ -246,6 +248,16 @@ export function ScrollView({
     ...(_pr !== undefined && { paddingRight: _pr }),
     ...(_pb !== undefined && { paddingBottom: _pb }),
     ...(_pl !== undefined && { paddingLeft: _pl }),
+  };
+
+  // Spacer element: gives the viewport its natural height based on content.
+  // This is a non-absolute element that contributes to layout.
+  // Height is clamped to contentHeight so viewport hugs short content,
+  // but flexShrink allows it to shrink when parent constrains it.
+  const spacerStyle: Style = {
+    height: contentHeight > 0 ? contentHeight : undefined,
+    flexShrink: 1,
+    minHeight: 0,
   };
 
   // Calculate scrollbar dimensions
@@ -290,7 +302,10 @@ export function ScrollView({
       },
       ...(focusable ? { focusable: true, focusId } : {}),
     },
-    // Content
+    // Spacer: contributes to layout height so ScrollView hugs short content.
+    // When parent constrains height, spacer shrinks and scrolling kicks in.
+    React.createElement("box" as any, { style: spacerStyle }),
+    // Content (absolutely positioned, scrolls via top offset)
     React.createElement(
       "box" as any,
       {

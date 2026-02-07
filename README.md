@@ -38,7 +38,7 @@ Build real terminal applications with React. Glyph provides a full component mod
 | | |
 |---|---|
 | **Flexbox Layout** | Full CSS-like flexbox via Yoga &mdash; rows, columns, wrapping, alignment, gaps, padding |
-| **Rich Components** | Box, Text, Input, Button, Checkbox, Radio, Select, ScrollView, List, Menu, Progress, Spinner, Toasts, Portal |
+| **Rich Components** | Box, Text, Input, Button, Checkbox, Radio, Select, ScrollView, List, Menu, Progress, Spinner, Toasts, Dialogs, Portal |
 | **Focus System** | Tab navigation, focus scopes, focus trapping for modals |
 | **Keyboard Input** | `useInput` hook, declarative `<Keybind>` component, vim-style bindings |
 | **Smart Rendering** | Double-buffered framebuffer with character-level diffing &mdash; only changed cells are written |
@@ -372,6 +372,51 @@ render(<ToastHost position="top-right"><App /></ToastHost>);
 
 Variants: `"info"`, `"success"`, `"warning"`, `"error"`. Auto-dismiss after `durationMs` (default 3000).
 
+### `<DialogHost>` + `useDialog()`
+
+Imperative `alert()` and `confirm()` dialogs, similar to browser APIs. Wrap your app in `<DialogHost>`, then show dialogs from anywhere.
+
+```tsx
+function App() {
+  const { alert, confirm } = useDialog();
+
+  const handleDelete = async () => {
+    const ok = await confirm("Delete this item?", {
+      okText: "Delete",
+      cancelText: "Keep"
+    });
+    if (ok) {
+      // delete the item
+    }
+  };
+
+  const handleSave = async () => {
+    await saveData();
+    await alert("Saved successfully!");
+  };
+
+  return <Button onPress={handleDelete}><Text>Delete</Text></Button>;
+}
+
+render(<DialogHost><App /></DialogHost>);
+```
+
+**Rich content** — pass React elements instead of strings:
+
+```tsx
+await alert(
+  <Box style={{ flexDirection: "column" }}>
+    <Text style={{ bold: true, color: "green" }}>✓ Success!</Text>
+    <Text>Your changes have been saved.</Text>
+  </Box>,
+  { okText: "Got it!" }
+);
+```
+
+**Keyboard:** Tab/Shift+Tab or arrows to switch buttons, Enter/Space to select, Escape to cancel.
+
+**Chained dialogs** work naturally with async/await — each dialog waits for the previous to close.
+
 ### `<Spacer>`
 
 Flexible space filler. Pushes siblings apart.
@@ -564,6 +609,7 @@ pnpm --filter menu-demo dev         # Styled menu
 pnpm --filter select-demo dev       # Dropdown select with search
 pnpm --filter forms-demo dev        # Checkbox and Radio inputs
 pnpm --filter masked-input dev      # Input masks (phone, credit card, etc.)
+pnpm --filter dialog-demo dev       # Alert and Confirm dialogs
 pnpm --filter dashboard dev         # Full task manager (all components)
 pnpm --filter showcase dev          # Progress, Spinner, Toasts
 ```

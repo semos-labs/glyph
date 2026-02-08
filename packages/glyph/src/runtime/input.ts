@@ -1,5 +1,23 @@
 import type { Key } from "../types/index.js";
 
+// Map key codes to key names (for kitty protocol and xterm modifyOtherKeys)
+function getKeyNameFromCode(code: number): string {
+  switch (code) {
+    case 13: return "return";
+    case 9: return "tab";
+    case 27: return "escape";
+    case 127: return "backspace";
+    case 8: return "backspace";
+    case 32: return " ";
+    default:
+      // Printable ASCII
+      if (code >= 32 && code <= 126) {
+        return String.fromCharCode(code).toLowerCase();
+      }
+      return "unknown";
+  }
+}
+
 export function parseKeySequence(data: string): Key[] {
   const keys: Key[] = [];
   let i = 0;
@@ -120,6 +138,17 @@ function parseCsiSequence(data: string, start: number): CsiResult | null {
       key = { name: "tab", sequence, shift: true };
       break;
     case "~": {
+      // Check for xterm modifyOtherKeys format: CSI 27;mod;code ~
+      if (params.startsWith("27;")) {
+        const modParts = params.split(";");
+        const mod = parseInt(modParts[1] ?? "1", 10) - 1;
+        const keyCode = parseInt(modParts[2] ?? "0", 10);
+        key = { name: getKeyNameFromCode(keyCode), sequence };
+        if (mod & 1) key.shift = true;
+        if (mod & 2) key.alt = true;
+        if (mod & 4) key.ctrl = true;
+        break;
+      }
       switch (params) {
         case "2":
           key = { name: "insert", sequence };
@@ -136,6 +165,17 @@ function parseCsiSequence(data: string, start: number): CsiResult | null {
         default:
           key = { name: "unknown", sequence };
       }
+      break;
+    }
+    // Kitty keyboard protocol: CSI code;mod u
+    case "u": {
+      const parts = params.split(";");
+      const keyCode = parseInt(parts[0] ?? "0", 10);
+      const mod = parseInt(parts[1] ?? "1", 10) - 1;
+      key = { name: getKeyNameFromCode(keyCode), sequence };
+      if (mod & 1) key.shift = true;
+      if (mod & 2) key.alt = true;
+      if (mod & 4) key.ctrl = true;
       break;
     }
     default:

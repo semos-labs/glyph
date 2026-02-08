@@ -428,18 +428,31 @@ export function render(
     ),
   );
 
+  // Error handlers for React 19 reconciler
+  const onUncaughtError = (error: Error) => {
+    if (debug) console.error("Uncaught error:", error);
+  };
+  const onCaughtError = (error: Error) => {
+    // Error caught by ErrorBoundary - this is expected
+    if (debug) console.error("Error caught by boundary:", error);
+  };
+  const onRecoverableError = (error: Error) => {
+    if (debug) console.error("Recoverable error:", error);
+  };
+
   // Create fiber root
-  const root = reconciler.createContainer(
+  // Cast to any - react-reconciler types don't match React 19 runtime API
+  const root = (reconciler.createContainer as any)(
     container,
-    0, // ConcurrentRoot tag = 0 (LegacyRoot)
-    null,
-    false,
-    null,
-    "",
-    (err: Error) => {
-      if (debug) console.error("Recoverable error:", err);
-    },
-    null,
+    0, // LegacyRoot tag
+    null, // hydrationCallbacks
+    false, // isStrictMode
+    null, // concurrentUpdatesByDefaultOverride
+    "", // identifierPrefix
+    onUncaughtError,
+    onCaughtError,
+    onRecoverableError,
+    null, // transitionCallbacks
   );
 
   reconciler.updateContainer(wrappedElement, root, null, null);

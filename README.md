@@ -617,6 +617,24 @@ pnpm --filter showcase dev          # Progress, Spinner, Toasts
 
 ---
 
+## Who Uses Glyph
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/nick-skriabin/aion">
+        <strong>Aion</strong>
+      </a>
+      <br>
+      <sub>Calendar & time management TUI</sub>
+    </td>
+  </tr>
+</table>
+
+<sub>Using Glyph in your project? <a href="https://github.com/nick-skriabin/glyph/issues">Let us know!</a></sub>
+
+---
+
 ## Architecture
 
 ```

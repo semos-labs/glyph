@@ -41,13 +41,15 @@ export function Checkbox({
   const checkedRef = useRef(checked);
   checkedRef.current = checked;
 
+  // Track when node is mounted with a valid focusId
+  const [nodeReady, setNodeReady] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
   // Register with focus system
   useEffect(() => {
     if (!focusCtx || !focusIdRef.current || !nodeRef.current || disabled) return;
     return focusCtx.register(focusIdRef.current, nodeRef.current);
-  }, [focusCtx, disabled]);
+  }, [focusCtx, disabled, nodeReady]);
 
   // Subscribe to focus changes
   useEffect(() => {
@@ -57,7 +59,7 @@ export function Checkbox({
     return focusCtx.onFocusChange((newId) => {
       setIsFocused(newId === fid);
     });
-  }, [focusCtx]);
+  }, [focusCtx, nodeReady]);
 
   // Handle space/enter to toggle
   useEffect(() => {
@@ -74,7 +76,7 @@ export function Checkbox({
     };
 
     return inputCtx.registerInputHandler(fid, handler);
-  }, [inputCtx, focusCtx, disabled]);
+  }, [inputCtx, focusCtx, disabled, nodeReady]);
 
   const mergedStyle: Style = {
     flexDirection: "row",
@@ -100,6 +102,11 @@ export function Checkbox({
         if (node) {
           nodeRef.current = node;
           focusIdRef.current = node.focusId;
+          setNodeReady(true);
+        } else {
+          nodeRef.current = null;
+          focusIdRef.current = null;
+          setNodeReady(false);
         }
       },
     },

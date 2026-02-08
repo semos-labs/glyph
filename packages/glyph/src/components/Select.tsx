@@ -64,6 +64,8 @@ export function Select({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
+  // Track when node is mounted with a valid focusId - this triggers effect re-runs
+  const [nodeReady, setNodeReady] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(0);
@@ -107,16 +109,17 @@ export function Select({
 
   // --- Focus registration ---
   // Always register on mount to maintain position in tab order
+  // nodeReady triggers re-run when ref callback fires
   useEffect(() => {
     if (!focusCtx || !focusIdRef.current || !nodeRef.current) return;
     return focusCtx.register(focusIdRef.current, nodeRef.current);
-  }, [focusCtx]);
+  }, [focusCtx, nodeReady]);
   
   // Mark as skippable when disabled - Tab will skip this element
   useEffect(() => {
     if (!focusCtx || !focusIdRef.current) return;
     focusCtx.setSkippable(focusIdRef.current, !!disabled);
-  }, [focusCtx, disabled]);
+  }, [focusCtx, disabled, nodeReady]);
 
   useEffect(() => {
     if (!focusCtx || !focusIdRef.current) return;
@@ -125,7 +128,7 @@ export function Select({
     return focusCtx.onFocusChange((newId) => {
       setIsFocused(newId === fid);
     });
-  }, [focusCtx]);
+  }, [focusCtx, nodeReady]);
 
   // Find next non-disabled index
   const findNextEnabled = useCallback(
@@ -153,6 +156,7 @@ export function Select({
   );
 
   // --- Input handler ---
+  // nodeReady ensures we re-run when the ref is set after conditional mount
   useEffect(() => {
     if (!inputCtx || !focusIdRef.current || disabled) return;
     const fid = focusIdRef.current;
@@ -274,6 +278,7 @@ export function Select({
     searchText,
     findNextEnabled,
     ensureVisible,
+    nodeReady,
   ]);
 
   // --- Trigger ---
@@ -447,6 +452,8 @@ export function Select({
       ? -(dropdownHeight) 
       : (triggerLayout.height || 1);
 
+    // Render dropdown with portal prop to escape ScrollView clipping
+    // The portal prop tells the painter to ignore parent clip boundaries
     dropdownElement = React.createElement(
       "box" as any,
       {
@@ -461,6 +468,8 @@ export function Select({
           flexDirection: "column" as const,
           ...dropdownStyle,
         },
+        // Escape parent clipping (e.g., ScrollView)
+        portal: true,
       },
       ...dropdownChildren,
     );
@@ -493,6 +502,13 @@ export function Select({
           if (node) {
             nodeRef.current = node;
             focusIdRef.current = node.focusId;
+            // Trigger effect re-runs now that refs are set
+            setNodeReady(true);
+          } else {
+            // Node unmounted
+            nodeRef.current = null;
+            focusIdRef.current = null;
+            setNodeReady(false);
           }
         },
       },

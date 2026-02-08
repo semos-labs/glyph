@@ -53,6 +53,8 @@ export function List({
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
+  // Track when node is mounted with a valid focusId
+  const [nodeReady, setNodeReady] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const lastKeyRef = useRef<string | null>(null);
 
@@ -88,7 +90,7 @@ export function List({
   useEffect(() => {
     if (!focusCtx || !focusIdRef.current || !nodeRef.current || !focusable) return;
     return focusCtx.register(focusIdRef.current, nodeRef.current);
-  }, [focusCtx, focusable]);
+  }, [focusCtx, focusable, nodeReady]);
 
   // Subscribe to focus changes
   useEffect(() => {
@@ -98,7 +100,7 @@ export function List({
     return focusCtx.onFocusChange((newId) => {
       setIsFocused(newId === fid);
     });
-  }, [focusCtx]);
+  }, [focusCtx, nodeReady]);
 
   // Find first non-disabled index from start or end
   const findFirstEnabled = useCallback(
@@ -167,7 +169,7 @@ export function List({
     };
 
     return inputCtx.registerInputHandler(fid, handler);
-  }, [inputCtx, focusCtx, focusable, selectedIndex, setIndex, findNextEnabled, findFirstEnabled, disabledIndices]);
+  }, [inputCtx, focusCtx, focusable, selectedIndex, setIndex, findNextEnabled, findFirstEnabled, disabledIndices, nodeReady]);
 
   // Render items
   const items: ReactNode[] = [];
@@ -188,6 +190,11 @@ export function List({
         if (node) {
           nodeRef.current = node;
           focusIdRef.current = node.focusId;
+          setNodeReady(true);
+        } else {
+          nodeRef.current = null;
+          focusIdRef.current = null;
+          setNodeReady(false);
         }
       },
     },

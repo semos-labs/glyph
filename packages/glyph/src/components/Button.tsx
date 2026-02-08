@@ -26,13 +26,15 @@ export function Button({
   const onPressRef = useRef(onPress);
   onPressRef.current = onPress;
 
+  // Track when node is mounted with a valid focusId - this triggers effect re-runs
+  const [nodeReady, setNodeReady] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
   // Register with focus system
   useEffect(() => {
     if (!focusCtx || !focusIdRef.current || !nodeRef.current || disabled) return;
     return focusCtx.register(focusIdRef.current, nodeRef.current);
-  }, [focusCtx, disabled]);
+  }, [focusCtx, disabled, nodeReady]);
 
   // Subscribe to focus changes for reactive visual state
   useEffect(() => {
@@ -43,7 +45,7 @@ export function Button({
     return focusCtx.onFocusChange((newId) => {
       setIsFocused(newId === fid);
     });
-  }, [focusCtx]);
+  }, [focusCtx, nodeReady]);
 
   // Handle enter/space when focused
   useEffect(() => {
@@ -60,7 +62,7 @@ export function Button({
     };
 
     return inputCtx.registerInputHandler(fid, handler);
-  }, [inputCtx, focusCtx, disabled]);
+  }, [inputCtx, focusCtx, disabled, nodeReady]);
 
   const mergedStyle: Style = {
     ...style,
@@ -76,6 +78,11 @@ export function Button({
         if (node) {
           nodeRef.current = node;
           focusIdRef.current = node.focusId;
+          setNodeReady(true);
+        } else {
+          nodeRef.current = null;
+          focusIdRef.current = null;
+          setNodeReady(false);
         }
       },
     },

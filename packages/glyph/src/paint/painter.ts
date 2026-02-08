@@ -54,7 +54,7 @@ export function paintTree(
 
   for (const root of roots) {
     if (root.hidden) continue;
-    collectPaintEntries(root, screenClip, root.style.zIndex ?? 0, entries);
+    collectPaintEntries(root, screenClip, root.style.zIndex ?? 0, entries, screenClip);
   }
 
   // Sort by zIndex (stable sort preserves tree order within same z)
@@ -77,25 +77,30 @@ function collectPaintEntries(
   parentClip: ClipRect,
   parentZ: number,
   entries: PaintEntry[],
+  screenClip: ClipRect,
 ): void {
   if (node.hidden) return;
 
   const zIndex = node.style.zIndex ?? parentZ;
 
+  // Portal nodes escape parent clipping - they use screen clip instead
+  const isPortal = node.props.portal === true;
+  const effectiveParentClip = isPortal ? screenClip : parentClip;
+
   // Compute clip for this node
-  const clip = node.style.clip ? intersectClip(parentClip, {
+  const clip = node.style.clip ? intersectClip(effectiveParentClip, {
     x: node.layout.innerX,
     y: node.layout.innerY,
     width: node.layout.innerWidth,
     height: node.layout.innerHeight,
-  }) : parentClip;
+  }) : effectiveParentClip;
 
-  entries.push({ node, clip: parentClip, zIndex });
+  entries.push({ node, clip: effectiveParentClip, zIndex });
 
   // Children - skip for text/input (leaf nodes for painting)
   if (node.type !== "text" && node.type !== "input") {
     for (const child of node.children) {
-      collectPaintEntries(child, clip, zIndex, entries);
+      collectPaintEntries(child, clip, zIndex, entries, screenClip);
     }
   }
 }

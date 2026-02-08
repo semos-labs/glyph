@@ -204,6 +204,8 @@ export function Input(props: InputProps): React.JSX.Element {
   const [cursorPos, setCursorPos] = useState(defaultValue.length);
   const [innerWidth, setInnerWidth] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
+  // Track when node is mounted with a valid focusId
+  const [nodeReady, setNodeReady] = useState(false);
   const inputCtx = useContext(InputContext);
   const focusCtx = useContext(FocusContext);
   const layoutCtx = useContext(LayoutContext);
@@ -267,7 +269,7 @@ export function Input(props: InputProps): React.JSX.Element {
   useEffect(() => {
     if (!focusCtx || !focusIdRef.current || !nodeRef.current) return;
     return focusCtx.register(focusIdRef.current, nodeRef.current);
-  }, [focusCtx]);
+  }, [focusCtx, nodeReady]);
 
   // Auto-focus on mount if requested
   // Use microtask to ensure this runs AFTER all registrations in the same render cycle
@@ -280,7 +282,7 @@ export function Input(props: InputProps): React.JSX.Element {
         focusCtx.requestFocus(fid);
       });
     }
-  }, [autoFocus, focusCtx]);
+  }, [autoFocus, focusCtx, nodeReady]);
 
   // Subscribe to focus changes for reactive visual state
   useEffect(() => {
@@ -290,7 +292,7 @@ export function Input(props: InputProps): React.JSX.Element {
     return focusCtx.onFocusChange((newId) => {
       setIsFocused(newId === fid);
     });
-  }, [focusCtx]);
+  }, [focusCtx, nodeReady]);
 
   // Register focused input handler - returns true for consumed keys
   useEffect(() => {
@@ -556,7 +558,7 @@ export function Input(props: InputProps): React.JSX.Element {
     };
 
     return inputCtx.registerInputHandler(fid, handler);
-  }, [inputCtx]);
+  }, [inputCtx, nodeReady]);
 
   // Merge styles based on focus state
   const mergedStyle: Style = {
@@ -577,6 +579,11 @@ export function Input(props: InputProps): React.JSX.Element {
       if (node) {
         nodeRef.current = node;
         focusIdRef.current = node.focusId;
+        setNodeReady(true);
+      } else {
+        nodeRef.current = null;
+        focusIdRef.current = null;
+        setNodeReady(false);
       }
     },
   });

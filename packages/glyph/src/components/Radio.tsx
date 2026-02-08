@@ -60,6 +60,8 @@ export function Radio<T = string>({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
+  // Track when node is mounted with a valid focusId
+  const [nodeReady, setNodeReady] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(() => {
     // Initialize to the selected item or first enabled item
@@ -85,7 +87,7 @@ export function Radio<T = string>({
   useEffect(() => {
     if (!focusCtx || !focusIdRef.current || !nodeRef.current || disabled) return;
     return focusCtx.register(focusIdRef.current, nodeRef.current);
-  }, [focusCtx, disabled]);
+  }, [focusCtx, disabled, nodeReady]);
 
   // Subscribe to focus changes
   useEffect(() => {
@@ -95,7 +97,7 @@ export function Radio<T = string>({
     return focusCtx.onFocusChange((newId) => {
       setIsFocused(newId === fid);
     });
-  }, [focusCtx]);
+  }, [focusCtx, nodeReady]);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -140,7 +142,7 @@ export function Radio<T = string>({
     };
 
     return inputCtx.registerInputHandler(fid, handler);
-  }, [inputCtx, focusCtx, disabled, items, highlightedIndex, findNextEnabled]);
+  }, [inputCtx, focusCtx, disabled, items, highlightedIndex, findNextEnabled, nodeReady]);
 
   // Sync highlighted index when value changes externally
   useEffect(() => {
@@ -210,6 +212,11 @@ export function Radio<T = string>({
         if (node) {
           nodeRef.current = node;
           focusIdRef.current = node.focusId;
+          setNodeReady(true);
+        } else {
+          nodeRef.current = null;
+          focusIdRef.current = null;
+          setNodeReady(false);
         }
       },
     },

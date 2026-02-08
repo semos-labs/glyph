@@ -22,6 +22,17 @@
         "typescript": "^5.5",
       },
     },
+    "examples/conditional-select": {
+      "name": "conditional-select-demo",
+      "dependencies": {
+        "@nick-skriabin/glyph": "workspace:*",
+        "react": "^19.1.0",
+      },
+      "devDependencies": {
+        "tsx": "^4.19.3",
+        "typescript": "^5.8.3",
+      },
+    },
     "examples/dashboard": {
       "name": "dashboard",
       "dependencies": {
@@ -320,6 +331,8 @@
     "chokidar": ["chokidar@4.0.3", "", { "dependencies": { "readdirp": "4.1.2" } }, "sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA=="],
 
     "commander": ["commander@4.1.1", "", {}, "sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA=="],
+
+    "conditional-select-demo": ["conditional-select-demo@workspace:examples/conditional-select"],
 
     "confbox": ["confbox@0.1.8", "", {}, "sha512-RMtmw0iFkeR4YV+fUOSucriAQNb9g8zFR52MWCtl+cCZOFRNL6zeB395vPzFhEjjn4fMxXudmELnl/KF/WrK6w=="],
 

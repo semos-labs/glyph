@@ -40,8 +40,8 @@ Build real terminal applications with React. Glyph provides a full component mod
 | | |
 |---|---|
 | **Flexbox Layout** | Full CSS-like flexbox via Yoga &mdash; rows, columns, wrapping, alignment, gaps, padding |
-| **Rich Components** | Box, Text, Input, Button, Checkbox, Radio, Select, ScrollView, List, Menu, Progress, Spinner, Toasts, Dialogs, Portal |
-| **Focus System** | Tab navigation, focus scopes, focus trapping for modals |
+| **Rich Components** | Box, Text, Input, Button, Checkbox, Radio, Select, ScrollView, List, Menu, Progress, Spinner, Toasts, Dialogs, Portal, JumpNav |
+| **Focus System** | Tab navigation, focus scopes, focus trapping for modals, JumpNav quick-jump hints |
 | **Keyboard Input** | `useInput` hook, declarative `<Keybind>` component, vim-style bindings |
 | **Smart Rendering** | Double-buffered framebuffer with character-level diffing &mdash; only changed cells are written |
 | **True Colors** | Named colors, hex, RGB, 256-palette. Auto-contrast text on colored backgrounds |
@@ -336,6 +336,44 @@ Renders children in a fullscreen absolute overlay. Useful for modals and dialogs
   </Box>
 </Portal>
 ```
+
+### `<JumpNav>`
+
+Quick keyboard navigation to any focusable element. Press an activation key to show hint labels on all focusable elements, then type the hint to jump directly to that element. Similar to Vim's EasyMotion or browser extensions like Vimium.
+
+```tsx
+function App() {
+  return (
+    <JumpNav activationKey="ctrl+o">
+      <Box style={{ flexDirection: "column", gap: 1 }}>
+        <Input placeholder="Name" />
+        <Input placeholder="Email" />
+        <Select items={countries} />
+        <Button onPress={submit}>Submit</Button>
+      </Box>
+    </JumpNav>
+  );
+}
+```
+
+**How it works:**
+1. Press `Ctrl+O` (or custom `activationKey`) to activate
+2. Hint labels (a, s, d, f...) appear next to each focusable element
+3. Type a hint to instantly focus that element
+4. Press `Escape` to cancel
+
+**Props:**
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `activationKey` | `string` | `"ctrl+o"` | Key to activate jump mode |
+| `hintChars` | `string` | `"asdfghjkl..."` | Characters used for hints |
+| `hintBg` | `Color` | `"yellow"` | Hint label background |
+| `hintFg` | `Color` | `"black"` | Hint label text color |
+| `hintStyle` | `Style` | `{}` | Additional hint label styling |
+| `enabled` | `boolean` | `true` | Enable/disable JumpNav |
+
+**Focus scope aware:** JumpNav automatically respects `<FocusScope trap>`. When a modal with a focus trap is open, only elements inside that trap will show hints.
 
 ### `<Keybind>`
 

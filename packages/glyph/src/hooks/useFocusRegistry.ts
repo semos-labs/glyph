@@ -42,7 +42,8 @@ export function useFocusRegistry(): FocusRegistryValue | null {
   const updateElements = useCallback(() => {
     if (!focusCtx) return;
     
-    const registered = focusCtx.getRegisteredElements?.() ?? [];
+    // Use getActiveElements to respect current focus trap
+    const registered = focusCtx.getActiveElements?.() ?? focusCtx.getRegisteredElements?.() ?? [];
     const mapped: FocusableElement[] = registered.map(({ id, node }) => ({
       id,
       node,

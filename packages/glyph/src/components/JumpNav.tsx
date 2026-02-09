@@ -1,18 +1,9 @@
-import React, { useState, useEffect, useCallback, useContext, useRef, createContext, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useContext, useRef, useMemo } from "react";
 import type { ReactNode } from "react";
 import type { Style, Color } from "../types/index.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 import type { LayoutRect } from "../types/index.js";
 import { InputContext, FocusContext, LayoutContext } from "../hooks/context.js";
-
-// Context for JumpNav coordination
-interface JumpNavContextValue {
-  // Track nested JumpNavs - child blocks parent
-  registerChildJumpNav: () => () => void;
-  isChildActive: boolean;
-}
-
-const JumpNavContext = createContext<JumpNavContextValue | null>(null);
 
 interface TrackedElement {
   id: string;
@@ -65,7 +56,9 @@ function generateHints(count: number, chars: string): string[] {
  * Press the activation key (default: Ctrl+O) to show hints next to each
  * focusable element, then press the hint key to jump to that element.
  * 
- * When nested, only the innermost JumpNav will respond to the activation key.
+ * JumpNav is trap-aware: it automatically only shows hints for elements
+ * in the current FocusScope trap (e.g., a modal). You only need ONE JumpNav
+ * at the root of your app.
  */
 export function JumpNav({
   children,
@@ -78,34 +71,19 @@ export function JumpNav({
   debug = false,
 }: JumpNavProps): React.JSX.Element {
   const log = debug ? (...args: any[]) => console.error('[JumpNav]', ...args) : () => {};
+  
   const [isActive, setIsActive] = useState(false);
   const [inputBuffer, setInputBuffer] = useState("");
-  const [hasChildJumpNav, setHasChildJumpNav] = useState(false);
   const [elements, setElements] = useState<TrackedElement[]>([]);
   
   const inputCtx = useContext(InputContext);
   const focusCtx = useContext(FocusContext);
   const layoutCtx = useContext(LayoutContext);
-  const parentJumpNav = useContext(JumpNavContext);
-  
-  // Ref to our wrapper node - used to find descendant focusables
-  const wrapperRef = useRef<GlyphNode | null>(null);
 
-  // Register with parent JumpNav so it defers to us
+  // Log mount info
   useEffect(() => {
-    if (parentJumpNav) {
-      return parentJumpNav.registerChildJumpNav();
-    }
-  }, [parentJumpNav]);
-
-  // Context value for child JumpNavs - memoized to prevent unnecessary re-renders
-  const contextValue = useMemo((): JumpNavContextValue => ({
-    isChildActive: hasChildJumpNav,
-    registerChildJumpNav: () => {
-      setHasChildJumpNav(true);
-      return () => setHasChildJumpNav(false);
-    },
-  }), [hasChildJumpNav]);
+    log('Mounted, inputCtx:', !!inputCtx, 'focusCtx:', !!focusCtx, 'enabled:', enabled);
+  }, []);
 
   // Parse activation key
   const parseKey = useCallback((keyStr: string) => {
@@ -121,49 +99,32 @@ export function JumpNav({
 
   const activationKeyParsed = parseKey(activationKey);
 
-  // Walk node tree to find all focusable descendants
-  const findFocusableDescendants = useCallback((node: GlyphNode): TrackedElement[] => {
-    const result: TrackedElement[] = [];
-    
-    function walk(n: GlyphNode) {
-      // If this node has a focusId, it's focusable
-      if (n.focusId) {
-        result.push({
-          id: n.focusId,
-          node: n,
-          layout: layoutCtx?.getLayout(n) ?? n.layout,
-        });
-      }
-      // Recurse into children
-      for (const child of n.children) {
-        walk(child);
-      }
-    }
-    
-    walk(node);
-    return result;
-  }, [layoutCtx]);
-
-  // Refresh elements by walking our subtree
+  // Refresh elements from the ACTIVE focus scope (trap-aware)
   const refreshElements = useCallback(() => {
-    if (!wrapperRef.current) {
-      log('refreshElements: no wrapper ref');
+    if (!focusCtx?.getActiveElements) {
+      log('refreshElements: no getActiveElements');
       return;
     }
     
-    const descendants = findFocusableDescendants(wrapperRef.current);
-    log('Found', descendants.length, 'focusable elements');
+    const active = focusCtx.getActiveElements();
+    log('getActiveElements returned', active.length, 'elements');
+    
+    const mapped: TrackedElement[] = active.map(({ id, node }) => ({
+      id,
+      node,
+      layout: layoutCtx?.getLayout(node) ?? node.layout,
+    }));
     
     // Sort by visual position (top-to-bottom, left-to-right)
-    descendants.sort((a, b) => {
+    mapped.sort((a, b) => {
       if (a.layout.y !== b.layout.y) {
         return a.layout.y - b.layout.y;
       }
       return a.layout.x - b.layout.x;
     });
     
-    setElements(descendants);
-  }, [findFocusableDescendants, log]);
+    setElements(mapped);
+  }, [focusCtx, layoutCtx, log]);
 
   // Track previous isActive to detect activation transition
   const wasActiveRef = useRef(false);
@@ -171,10 +132,11 @@ export function JumpNav({
   // Refresh elements when activated
   useEffect(() => {
     if (isActive && !wasActiveRef.current) {
+      log('Activated! Refreshing elements...');
       refreshElements();
     }
     wasActiveRef.current = isActive;
-  }, [isActive, refreshElements]);
+  }, [isActive, refreshElements, log]);
 
   // Filter elements with valid layout (visible and computed)
   const visibleElements = elements.filter(el => 
@@ -193,12 +155,6 @@ export function JumpNav({
     return map;
   }, [visibleElements, visibleHints]);
 
-  // Log mount info
-  useEffect(() => {
-    log('Mounted, inputCtx:', !!inputCtx, 'enabled:', enabled, 'activationKey:', activationKey);
-    log('Parsed key:', activationKeyParsed);
-  }, []);
-
   // Handle key input
   useEffect(() => {
     if (!inputCtx || !enabled) {
@@ -206,20 +162,19 @@ export function JumpNav({
       return;
     }
 
-    log('Subscribing to priority input');
+    log('Subscribing to priority input, activation key:', activationKey);
 
     const handler = (key: { name?: string; ctrl?: boolean; alt?: boolean; shift?: boolean; meta?: boolean; sequence?: string }) => {
-      log('Key received:', key.name, 'ctrl:', key.ctrl, 'isActive:', isActive, 'hasChild:', hasChildJumpNav);
+      // Check for activation key
+      const nameMatch = key.name === activationKeyParsed.name;
+      const ctrlMatch = !!key.ctrl === activationKeyParsed.ctrl;
+      const altMatch = !!key.alt === activationKeyParsed.alt;
+      const shiftMatch = !!key.shift === activationKeyParsed.shift;
+      const metaMatch = !!key.meta === activationKeyParsed.meta;
       
-      // Check for activation key - only if no child JumpNav exists (child takes priority)
       if (
         !isActive &&
-        !hasChildJumpNav &&
-        key.name === activationKeyParsed.name &&
-        !!key.ctrl === activationKeyParsed.ctrl &&
-        !!key.alt === activationKeyParsed.alt &&
-        !!key.shift === activationKeyParsed.shift &&
-        !!key.meta === activationKeyParsed.meta
+        nameMatch && ctrlMatch && altMatch && shiftMatch && metaMatch
       ) {
         log('Activation key matched! Activating...');
         setIsActive(true);
@@ -231,6 +186,7 @@ export function JumpNav({
       if (isActive) {
         // Escape to cancel
         if (key.name === "escape") {
+          log('Escape pressed, deactivating');
           setIsActive(false);
           setInputBuffer("");
           return true;
@@ -245,10 +201,12 @@ export function JumpNav({
         // Letter input
         if (key.sequence && key.sequence.length === 1 && /[a-z]/i.test(key.sequence)) {
           const newBuffer = inputBuffer + key.sequence.toLowerCase();
+          log('Buffer:', newBuffer);
           
           // Check for exact match
           const targetId = visibleHintMap.get(newBuffer);
           if (targetId) {
+            log('Jumping to', targetId);
             focusCtx?.requestFocus(targetId);
             setIsActive(false);
             setInputBuffer("");
@@ -276,12 +234,22 @@ export function JumpNav({
 
     // Use priority handler so we capture keys before focused inputs
     return inputCtx.subscribePriority(handler);
-  }, [inputCtx, enabled, isActive, activationKeyParsed, inputBuffer, visibleHintMap, focusCtx, hasChildJumpNav]);
+  }, [inputCtx, enabled, isActive, activationKeyParsed, inputBuffer, visibleHintMap, focusCtx, activationKey, log]);
 
-  // Render floating hint labels when active (no overlay - just hints)
+  // Render floating hint labels when active - wrapped in Portal to not affect layout
   const hintsOverlay = isActive ? React.createElement(
-    React.Fragment,
-    null,
+    "box" as any,
+    {
+      // Portal-like wrapper - fullscreen absolute overlay
+      style: {
+        position: "absolute" as const,
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 99998,
+      },
+    },
     // Hint labels - floating on top of content
     ...visibleElements.map((el, i) => {
       const hint = visibleHints[i];
@@ -333,24 +301,10 @@ export function JumpNav({
     ),
   ) : null;
 
-  // Wrap children in an invisible box so we can walk its subtree
-  const wrappedChildren = React.createElement(
-    "box" as any,
-    {
-      ref: (node: GlyphNode | null) => { wrapperRef.current = node; },
-      style: {
-        // Invisible wrapper - takes full size of parent
-        flexGrow: 1,
-        flexDirection: "column" as const,
-      },
-    },
-    children,
-  );
-
   return React.createElement(
-    JumpNavContext.Provider,
-    { value: contextValue },
-    wrappedChildren,
+    React.Fragment,
+    null,
+    children,
     hintsOverlay,
   );
 }

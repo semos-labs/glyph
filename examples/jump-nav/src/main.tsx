@@ -10,16 +10,14 @@ import {
   JumpNav,
   Keybind,
   DialogHost,
-  useDialog,
   Portal,
   FocusScope,
-  ScrollView,
 } from "@nick-skriabin/glyph";
 
-// Settings modal component
-function SettingsModal({ 
-  onClose 
-}: { 
+// Settings modal component - NO JumpNav needed inside!
+function SettingsModal({
+  onClose
+}: {
   onClose: () => void;
 }) {
   const [theme, setTheme] = useState("dark");
@@ -46,101 +44,99 @@ function SettingsModal({
             bg: "black",
           }}
         />
-        
-        {/* Modal */}
+
+        {/* Modal - FocusScope trap makes JumpNav show only modal elements */}
         <FocusScope trap autoFocus>
-          <JumpNav activationKey="ctrl+o">
-            <Box
-              style={{
-                position: "relative",
-                bg: "blackBright",
-                padding: 1,
-                width: 50,
-                flexDirection: "column",
-                gap: 1,
-              }}
-            >
-              <Text style={{ bold: true, color: "cyan" }}>
-                ⚙ Settings (Ctrl+O for jump hints)
-              </Text>
+          <Box
+            style={{
+              position: "relative",
+              bg: "blackBright",
+              padding: 1,
+              width: 50,
+              flexDirection: "column",
+              gap: 1,
+            }}
+          >
+            <Text style={{ bold: true, color: "cyan" }}>
+              ⚙ Settings (Ctrl+O for jump hints)
+            </Text>
 
-              {/* Theme select */}
-              <Box style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
-                <Text style={{ width: 14, color: "gray" }}>Theme</Text>
-                <Select
-                  items={[
-                    { label: "Dark", value: "dark" },
-                    { label: "Light", value: "light" },
-                    { label: "System", value: "system" },
-                  ]}
-                  value={theme}
-                  onChange={setTheme}
-                  style={{ bg: "black", flexGrow: 1 }}
-                  focusedStyle={{ bg: "white", color: "black" }}
-                  highlightColor="cyan"
-                />
-              </Box>
-
-              {/* Language select */}
-              <Box style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
-                <Text style={{ width: 14, color: "gray" }}>Language</Text>
-                <Select
-                  items={[
-                    { label: "English", value: "en" },
-                    { label: "Spanish", value: "es" },
-                    { label: "French", value: "fr" },
-                    { label: "German", value: "de" },
-                  ]}
-                  value={language}
-                  onChange={setLanguage}
-                  style={{ bg: "black", flexGrow: 1 }}
-                  focusedStyle={{ bg: "white", color: "black" }}
-                  highlightColor="cyan"
-                />
-              </Box>
-
-              {/* Checkboxes */}
-              <Box style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
-                <Text style={{ width: 14, color: "gray" }}> </Text>
-                <Checkbox
-                  checked={notifications}
-                  onChange={setNotifications}
-                  label="Enable notifications"
-                  focusedStyle={{ color: "cyan" }}
-                />
-              </Box>
-
-              <Box style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
-                <Text style={{ width: 14, color: "gray" }}> </Text>
-                <Checkbox
-                  checked={autoSave}
-                  onChange={setAutoSave}
-                  label="Auto-save drafts"
-                  focusedStyle={{ color: "cyan" }}
-                />
-              </Box>
-
-              {/* Buttons */}
-              <Box style={{ flexDirection: "row", gap: 2, marginTop: 1, justifyContent: "flex-end" }}>
-                <Button
-                  onPress={onClose}
-                  style={{ paddingX: 2, bg: "black" }}
-                  focusedStyle={{ bg: "green", color: "black" }}
-                >
-                  <Text>Save</Text>
-                </Button>
-                <Button
-                  onPress={onClose}
-                  style={{ paddingX: 2, bg: "black" }}
-                  focusedStyle={{ bg: "red", color: "white" }}
-                >
-                  <Text>Cancel</Text>
-                </Button>
-              </Box>
-
-              <Keybind keypress="escape" onPress={onClose} />
+            {/* Theme select */}
+            <Box style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
+              <Text style={{ width: 14, color: "gray" }}>Theme</Text>
+              <Select
+                items={[
+                  { label: "Dark", value: "dark" },
+                  { label: "Light", value: "light" },
+                  { label: "System", value: "system" },
+                ]}
+                value={theme}
+                onChange={setTheme}
+                style={{ bg: "black", flexGrow: 1 }}
+                focusedStyle={{ bg: "white", color: "black" }}
+                highlightColor="cyan"
+              />
             </Box>
-          </JumpNav>
+
+            {/* Language select */}
+            <Box style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
+              <Text style={{ width: 14, color: "gray" }}>Language</Text>
+              <Select
+                items={[
+                  { label: "English", value: "en" },
+                  { label: "Spanish", value: "es" },
+                  { label: "French", value: "fr" },
+                  { label: "German", value: "de" },
+                ]}
+                value={language}
+                onChange={setLanguage}
+                style={{ bg: "black", flexGrow: 1 }}
+                focusedStyle={{ bg: "white", color: "black" }}
+                highlightColor="cyan"
+              />
+            </Box>
+
+            {/* Checkboxes */}
+            <Box style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
+              <Text style={{ width: 14, color: "gray" }}> </Text>
+              <Checkbox
+                checked={notifications}
+                onChange={setNotifications}
+                label="Enable notifications"
+                focusedStyle={{ color: "cyan" }}
+              />
+            </Box>
+
+            <Box style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
+              <Text style={{ width: 14, color: "gray" }}> </Text>
+              <Checkbox
+                checked={autoSave}
+                onChange={setAutoSave}
+                label="Auto-save drafts"
+                focusedStyle={{ color: "cyan" }}
+              />
+            </Box>
+
+            {/* Buttons */}
+            <Box style={{ flexDirection: "row", gap: 2, marginTop: 1, justifyContent: "flex-end" }}>
+              <Button
+                onPress={onClose}
+                style={{ paddingX: 2, bg: "black" }}
+                focusedStyle={{ bg: "green", color: "black" }}
+              >
+                <Text>Save</Text>
+              </Button>
+              <Button
+                onPress={onClose}
+                style={{ paddingX: 2, bg: "black" }}
+                focusedStyle={{ bg: "red", color: "white" }}
+              >
+                <Text>Cancel</Text>
+              </Button>
+            </Box>
+
+            <Keybind keypress="escape" onPress={onClose} />
+          </Box>
         </FocusScope>
       </Box>
     </Portal>
@@ -173,6 +169,7 @@ function App() {
 
   return (
     <DialogHost>
+      {/* ONE JumpNav at root - it's trap-aware! */}
       <JumpNav activationKey="ctrl+o">
         <Box style={{ flexDirection: "column", padding: 1 }}>
           {/* Header */}
@@ -192,7 +189,7 @@ function App() {
           {/* Instructions */}
           <Box style={{ marginBottom: 1 }}>
             <Text style={{ color: "gray", dim: true }}>
-              Tab to navigate • Ctrl+O for jump hints • Try opening Settings modal!
+              Tab to navigate • Ctrl+O for jump hints • Open Settings to test trap-aware hints!
             </Text>
           </Box>
 
@@ -328,7 +325,7 @@ function App() {
 
         <Keybind keypress="ctrl+c" onPress={() => process.exit(0)} />
 
-        {/* Settings Modal - must be inside JumpNav for context to flow */}
+        {/* Settings Modal */}
         {showSettings && (
           <SettingsModal onClose={() => setShowSettings(false)} />
         )}

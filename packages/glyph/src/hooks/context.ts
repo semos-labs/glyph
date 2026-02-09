@@ -37,6 +37,8 @@ export interface FocusContextValue {
   onFocusChange(handler: (focusedId: string | null) => void): () => void;
   /** Get all registered focusable elements (for custom navigation UIs) */
   getRegisteredElements(): RegisteredElement[];
+  /** Get focusable elements in the current trap scope (or all if no trap) */
+  getActiveElements(): RegisteredElement[];
 }
 
 export const FocusContext = createContext<FocusContextValue | null>(null);

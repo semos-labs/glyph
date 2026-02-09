@@ -210,6 +210,19 @@ export function render(
       }
       return result;
     },
+    getActiveElements() {
+      // Return elements in the current trap scope (or all if no trap)
+      const activeIds = getActiveFocusableIds();
+      const result: { id: string; node: GlyphNode }[] = [];
+      for (const id of activeIds) {
+        if (skippableIds.has(id)) continue;
+        const node = focusRegistry.get(id);
+        if (node) {
+          result.push({ id, node });
+        }
+      }
+      return result;
+    },
   };
 
   // ---- Layout system ----

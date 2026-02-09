@@ -717,23 +717,36 @@ render(<App />, { useNativeCursor: false });
 
 ## Examples
 
+Interactive examples are included in the repo. Each demonstrates different components and patterns:
+
+| Example | Description | Source |
+|---------|-------------|--------|
+| **basic-layout** | Flexbox layout fundamentals | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/basic-layout) |
+| **modal-input** | Modal dialogs, input focus trapping | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/modal-input) |
+| **scrollview-demo** | Scrollable content with keyboard navigation | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/scrollview-demo) |
+| **list-demo** | Keyboard-navigable lists | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/list-demo) |
+| **menu-demo** | Styled menus with icons | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/menu-demo) |
+| **select-demo** | Dropdown select with search | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/select-demo) |
+| **forms-demo** | Checkbox and Radio inputs | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/forms-demo) |
+| **masked-input** | Input masks (phone, credit card, SSN) | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/masked-input) |
+| **dialog-demo** | Alert and Confirm dialogs | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/dialog-demo) |
+| **jump-nav** | Quick navigation with keyboard hints | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/jump-nav) |
+| **showcase** | Progress bars, Spinners, Toasts | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/showcase) |
+| **dashboard** | Full task manager (all components) | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/dashboard) |
+
+### Running Examples Locally
+
 ```bash
 # Clone and install
-git clone <repo-url> && cd glyph
-pnpm install && pnpm build
+git clone https://github.com/nick-skriabin/glyph.git && cd glyph
+bun install && bun run build
 
-# Run examples
-pnpm --filter basic-layout dev      # Flexbox layout demo
-pnpm --filter modal-input dev       # Modal, input, focus trapping
-pnpm --filter scrollview-demo dev   # Scrollable content
-pnpm --filter list-demo dev         # Keyboard-navigable list
-pnpm --filter menu-demo dev         # Styled menu
-pnpm --filter select-demo dev       # Dropdown select with search
-pnpm --filter forms-demo dev        # Checkbox and Radio inputs
-pnpm --filter masked-input dev      # Input masks (phone, credit card, etc.)
-pnpm --filter dialog-demo dev       # Alert and Confirm dialogs
-pnpm --filter dashboard dev         # Full task manager (all components)
-pnpm --filter showcase dev          # Progress, Spinner, Toasts
+# Run any example
+bun run --filter <example-name> dev
+
+# e.g.
+bun run --filter dashboard dev
+bun run --filter jump-nav dev
 ```
 
 ---

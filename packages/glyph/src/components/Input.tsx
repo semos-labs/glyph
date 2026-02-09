@@ -272,15 +272,24 @@ export function Input(props: InputProps): React.JSX.Element {
   }, [focusCtx, nodeReady]);
 
   // Auto-focus on mount if requested
-  // Use microtask to ensure this runs AFTER all registrations in the same render cycle
+  // Use setTimeout to ensure this runs AFTER all registrations and layout effects complete
   const autoFocusedRef = useRef(false);
   useEffect(() => {
+    // Reset the flag when node is not ready (component unmounted/remounting)
+    if (!nodeReady) {
+      autoFocusedRef.current = false;
+      return;
+    }
+    
     if (autoFocus && !autoFocusedRef.current && focusCtx && focusIdRef.current) {
       autoFocusedRef.current = true;
       const fid = focusIdRef.current;
-      queueMicrotask(() => {
+      // Use setTimeout(0) instead of queueMicrotask for more reliable timing
+      // This ensures registration has fully propagated through the focus system
+      const timer = setTimeout(() => {
         focusCtx.requestFocus(fid);
-      });
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [autoFocus, focusCtx, nodeReady]);
 

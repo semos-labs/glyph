@@ -128,37 +128,34 @@ export function Image({
     return layoutCtx.subscribe(nodeRef.current, setLayout);
   }, [layoutCtx, nodeReady]);
 
-  // Track scroll position and hide image when scrolling
+  // Track scroll position and hide image when user scrolls
+  // Only check when scrollViewCtx's scroll offset changes (via context identity change)
   useEffect(() => {
-    if (!scrollViewCtx) {
-      // Not inside a ScrollView, always visible
-      return;
-    }
+    if (!scrollViewCtx) return;
     
-    // Get current scroll offset
     const bounds = scrollViewCtx.getBounds();
     const currentOffset = bounds.scrollOffset;
     
-    // Initialize on first check
+    // Initialize on first mount
     if (lastScrollOffsetRef.current === null) {
       lastScrollOffsetRef.current = currentOffset;
       return;
     }
     
-    // If scroll offset changed since last check, hide the image permanently
+    // If scroll offset actually changed, hide the image
     if (currentOffset !== lastScrollOffsetRef.current) {
       lastScrollOffsetRef.current = currentOffset;
       setIsVisible(false);
-      setComputedDims(null); // Reset box size
+      setComputedDims(null);
     }
-  }); // Run on every render to detect scroll changes
+  }, [scrollViewCtx]); // Only run when context changes (which happens on scroll)
 
-  // Register/update image with overlay system when loaded, visible, and layout changes
+  // Register/update image with overlay system when loaded and layout changes
   useEffect(() => {
     if (!imageOverlayCtx || state !== "loaded" || !loadedImageRef.current || !layout) return;
     
-    // Don't register if inside a ScrollView and not visible
-    if (scrollViewCtx && !isVisible) {
+    // Don't register if hidden due to scroll
+    if (!isVisible) {
       return;
     }
 
@@ -177,7 +174,7 @@ export function Image({
     return () => {
       imageOverlayCtx.unregisterImage(imageId);
     };
-  }, [imageOverlayCtx, state, layout, scrollViewCtx, isVisible]);
+  }, [imageOverlayCtx, state, layout, isVisible]);
 
   // Load and display image
   const loadAndDisplay = useCallback(async () => {

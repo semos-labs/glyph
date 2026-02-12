@@ -123,10 +123,10 @@ export function Image({
     onStateChange?.(newState);
   }, [onStateChange]);
 
-  // Register with focus system
+  // Register with focus system (autoFocus: false - images shouldn't steal focus on mount)
   useEffect(() => {
     if (!focusCtx || !focusIdRef.current || !nodeRef.current || !focusable) return;
-    return focusCtx.register(focusIdRef.current, nodeRef.current);
+    return focusCtx.register(focusIdRef.current, nodeRef.current, false);
   }, [focusCtx, focusable, nodeReady]);
 
   // Subscribe to focus changes
@@ -340,6 +340,12 @@ export function Image({
         loadedImageRef.current = null;
         setComputedDims(null); // Reset box size
         updateState("placeholder");
+        return true;
+      }
+
+      // Second Escape on placeholder releases focus
+      if (key.name === "escape" && state === "placeholder") {
+        focusCtx?.blur();
         return true;
       }
 

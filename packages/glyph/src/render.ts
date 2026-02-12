@@ -129,6 +129,7 @@ export function render(
     const focusRegistry = new Map<string, GlyphNode>();
     const focusOrder: string[] = [];
     const skippableIds = new Set<string>(); // Disabled/skippable elements during Tab
+    const noAutoFocusIds = new Set<string>(); // Elements that shouldn't receive auto-focus
     let trapStack: Array<Set<string>> = [];
     const focusChangeHandlers = new Set<(id: string | null) => void>();
 
@@ -177,35 +178,44 @@ export function render(
       get focusedId() {
         return focusedId;
       },
-      register(id: string, node: GlyphNode) {
+      register(id: string, node: GlyphNode, autoFocus: boolean = true) {
         focusRegistry.set(id, node);
         if (!focusOrder.includes(id)) {
           focusOrder.push(id);
+        }
+        // Track if element should not receive auto-focus
+        if (!autoFocus) {
+          noAutoFocusIds.add(id);
         }
         // Auto-register in active trap
         if (trapStack.length > 0) {
           trapStack[trapStack.length - 1]!.add(id);
         }
         // Auto-focus first item if nothing focused (by visual order)
-        if (focusedId === null) {
-          const activeIds = getActiveFocusableIds();
+        // Skip elements that opted out of auto-focus
+        if (focusedId === null && autoFocus) {
+          const activeIds = getActiveFocusableIds().filter(i => !noAutoFocusIds.has(i));
           if (activeIds.length > 0) {
             setFocusedId(activeIds[0]!);
           }
         }
         return () => {
           focusRegistry.delete(id);
+          noAutoFocusIds.delete(id);
           const idx = focusOrder.indexOf(id);
           if (idx !== -1) focusOrder.splice(idx, 1);
           if (focusedId === id) {
-            // Focus first by visual order
-            const activeIds = getActiveFocusableIds();
+            // Focus first by visual order (excluding noAutoFocus elements)
+            const activeIds = getActiveFocusableIds().filter(i => !noAutoFocusIds.has(i));
             setFocusedId(activeIds[0] ?? null);
           }
         };
       },
       requestFocus(id: string) {
         setFocusedId(id);
+      },
+      blur() {
+        setFocusedId(null);
       },
       focusNext() {
         const ids = getActiveFocusableIds();

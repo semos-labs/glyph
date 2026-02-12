@@ -26,8 +26,14 @@ export interface RegisteredElement {
 
 export interface FocusContextValue {
   focusedId: string | null;
-  register(id: string, node: GlyphNode): () => void;
+  /** 
+   * Register a focusable element. 
+   * @param autoFocus - If false, element won't receive auto-focus when nothing is focused (default: true)
+   */
+  register(id: string, node: GlyphNode, autoFocus?: boolean): () => void;
   requestFocus(id: string): void;
+  /** Clear focus from all elements */
+  blur(): void;
   focusNext(): void;
   focusPrev(): void;
   /** Mark an element as skippable during Tab navigation (e.g., disabled elements) */

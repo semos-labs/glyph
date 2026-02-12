@@ -96,7 +96,12 @@ export function render(
     unregisterImage(id: number) {
       renderedImages.delete(id);
       pendingImageRenders.delete(id);
-      // Note: Kitty protocol images persist until cleared or scrolled off
+      // Clear the image from terminal
+      const clearSeq = clearImageEscapeSequence(id);
+      if (clearSeq) {
+        terminal.write(clearSeq);
+      }
+      scheduleRender(); // Redraw to fill the cleared space
     },
   };
 

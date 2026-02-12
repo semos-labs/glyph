@@ -40,6 +40,20 @@ describe("parseKeySequence", () => {
     expect(keys[0]?.name).toBe("tab");
   });
 
+  test("parses space key", () => {
+    const keys = parseKeySequence(" ");
+    expect(keys.length).toBe(1);
+    expect(keys[0]?.name).toBe("space");
+    expect(keys[0]?.sequence).toBe(" ");
+  });
+
+  test("parses alt+space", () => {
+    const keys = parseKeySequence("\x1b ");
+    expect(keys.length).toBe(1);
+    expect(keys[0]?.name).toBe("space");
+    expect(keys[0]?.alt).toBe(true);
+  });
+
   test("parses arrow keys", () => {
     expect(parseKeySequence("\x1b[A")[0]?.name).toBe("up");
     expect(parseKeySequence("\x1b[B")[0]?.name).toBe("down");

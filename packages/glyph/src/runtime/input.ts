@@ -8,7 +8,7 @@ function getKeyNameFromCode(code: number): string {
     case 9: return "tab";
     case 13: return "return";
     case 27: return "escape";
-    case 32: return " ";
+    case 32: return "space";
     case 127: return "backspace";
     
     // Kitty protocol special keys
@@ -164,8 +164,9 @@ export function parseKeySequence(data: string): Key[] {
 
       // Alt + char: ESC followed by a printable char
       if (i + 1 < data.length && data.charCodeAt(i + 1) >= 32) {
+        const nextChar = data[i + 1]!;
         keys.push({
-          name: data[i + 1]!.toLowerCase(),
+          name: nextChar === " " ? "space" : nextChar.toLowerCase(),
           sequence: data.substring(i, i + 2),
           alt: true,
         });
@@ -202,8 +203,8 @@ export function parseKeySequence(data: string): Key[] {
       continue;
     }
 
-    // Printable characters
-    keys.push({ name: ch, sequence: ch });
+    // Printable characters (space gets special name)
+    keys.push({ name: ch === " " ? "space" : ch, sequence: ch });
     i++;
   }
 

@@ -3,12 +3,16 @@ import type { Style, LayoutRect, Color } from "../types/index.js";
 
 export type GlyphNodeType = "box" | "text" | "input";
 
+export type GlyphChild = GlyphNode | GlyphTextInstance;
+
 export interface GlyphNode {
   type: GlyphNodeType;
   props: Record<string, any>;
   style: Style;
   children: GlyphNode[];
   rawTextChildren: GlyphTextInstance[];
+  /** All children in order (both nodes and raw text) for correct text composition */
+  allChildren: GlyphChild[];
   parent: GlyphNode | null;
   yogaNode: YogaNode | null;
   text: string | null;
@@ -45,6 +49,7 @@ export function createGlyphNode(
     style,
     children: [],
     rawTextChildren: [],
+    allChildren: [],
     parent: null,
     yogaNode: null,
     text: null,
@@ -57,6 +62,14 @@ export function createGlyphNode(
 export function appendChild(parent: GlyphNode, child: GlyphNode): void {
   child.parent = parent;
   parent.children.push(child);
+  parent.allChildren.push(child);
+}
+
+export function appendTextChild(parent: GlyphNode, child: GlyphTextInstance): void {
+  child.parent = parent;
+  parent.rawTextChildren.push(child);
+  parent.allChildren.push(child);
+  parent.text = parent.rawTextChildren.map((t) => t.text).join("");
 }
 
 export function removeChild(parent: GlyphNode, child: GlyphNode): void {
@@ -65,6 +78,19 @@ export function removeChild(parent: GlyphNode, child: GlyphNode): void {
     parent.children.splice(idx, 1);
     child.parent = null;
   }
+  const allIdx = parent.allChildren.indexOf(child);
+  if (allIdx !== -1) {
+    parent.allChildren.splice(allIdx, 1);
+  }
+}
+
+export function removeTextChild(parent: GlyphNode, child: GlyphTextInstance): void {
+  child.parent = null;
+  const idx = parent.rawTextChildren.indexOf(child);
+  if (idx !== -1) parent.rawTextChildren.splice(idx, 1);
+  const allIdx = parent.allChildren.indexOf(child);
+  if (allIdx !== -1) parent.allChildren.splice(allIdx, 1);
+  parent.text = parent.rawTextChildren.map((t) => t.text).join("") || null;
 }
 
 export function insertBefore(
@@ -79,6 +105,29 @@ export function insertBefore(
   } else {
     parent.children.push(child);
   }
+  // Also maintain allChildren order
+  const allIdx = parent.allChildren.indexOf(beforeChild);
+  if (allIdx !== -1) {
+    parent.allChildren.splice(allIdx, 0, child);
+  } else {
+    parent.allChildren.push(child);
+  }
+}
+
+export function insertTextBefore(
+  parent: GlyphNode,
+  child: GlyphTextInstance,
+  beforeChild: GlyphChild,
+): void {
+  child.parent = parent;
+  parent.rawTextChildren.push(child);
+  const allIdx = parent.allChildren.indexOf(beforeChild);
+  if (allIdx !== -1) {
+    parent.allChildren.splice(allIdx, 0, child);
+  } else {
+    parent.allChildren.push(child);
+  }
+  parent.text = parent.rawTextChildren.map((t) => t.text).join("");
 }
 
 export function getInheritedTextStyle(node: GlyphNode): {
@@ -114,10 +163,68 @@ export function getInheritedTextStyle(node: GlyphNode): {
 }
 
 export function collectTextContent(node: GlyphNode): string {
-  if (node.text != null) return node.text;
+  if (node.text != null && node.allChildren.length === 0) return node.text;
   let result = "";
-  for (const child of node.children) {
-    result += collectTextContent(child);
+  for (const child of node.allChildren) {
+    if (child.type === "raw-text") {
+      result += child.text;
+    } else {
+      result += collectTextContent(child);
+    }
   }
+  // Fallback for nodes without allChildren populated
+  if (!result && node.text != null) return node.text;
   return result;
+}
+
+/** Text style properties for styled segments */
+export interface TextStyleProps {
+  color?: Color;
+  bg?: Color;
+  bold?: boolean;
+  dim?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+}
+
+/** A segment of text with its accumulated style from nested Text components */
+export interface TextSegment {
+  text: string;
+  style: TextStyleProps;
+}
+
+/** Collect text segments with their styles for proper nested text rendering */
+export function collectStyledSegments(
+  node: GlyphNode,
+  inheritedStyle: TextStyleProps = {},
+): TextSegment[] {
+  const segments: TextSegment[] = [];
+  
+  // Merge current node's style with inherited
+  const currentStyle: TextStyleProps = {
+    color: node.style.color ?? inheritedStyle.color,
+    bg: node.style.bg ?? inheritedStyle.bg,
+    bold: node.style.bold ?? inheritedStyle.bold,
+    dim: node.style.dim ?? inheritedStyle.dim,
+    italic: node.style.italic ?? inheritedStyle.italic,
+    underline: node.style.underline ?? inheritedStyle.underline,
+  };
+  
+  // If no allChildren, use text directly
+  if (node.allChildren.length === 0 && node.text != null) {
+    segments.push({ text: node.text, style: currentStyle });
+    return segments;
+  }
+  
+  // Traverse children in order
+  for (const child of node.allChildren) {
+    if (child.type === "raw-text") {
+      segments.push({ text: child.text, style: currentStyle });
+    } else {
+      // Recurse into child node with current style as inherited
+      segments.push(...collectStyledSegments(child, currentStyle));
+    }
+  }
+  
+  return segments;
 }

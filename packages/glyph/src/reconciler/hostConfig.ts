@@ -3,12 +3,16 @@ import type {
   GlyphTextInstance,
   GlyphContainer,
   GlyphNodeType,
+  GlyphChild,
 } from "./nodes.js";
 import {
   createGlyphNode,
   appendChild as glyphAppendChild,
+  appendTextChild as glyphAppendTextChild,
   removeChild as glyphRemoveChild,
+  removeTextChild as glyphRemoveTextChild,
   insertBefore as glyphInsertBefore,
+  insertTextBefore as glyphInsertTextBefore,
 } from "./nodes.js";
 import type { Style } from "../types/index.js";
 
@@ -101,10 +105,7 @@ export const hostConfig = {
     child: GlyphNode | GlyphTextInstance,
   ): void {
     if (child.type === "raw-text") {
-      const textChild = child as GlyphTextInstance;
-      textChild.parent = parentInstance;
-      parentInstance.rawTextChildren.push(textChild);
-      parentInstance.text = parentInstance.rawTextChildren.map((t) => t.text).join("");
+      glyphAppendTextChild(parentInstance, child as GlyphTextInstance);
     } else {
       glyphAppendChild(parentInstance, child as GlyphNode);
     }
@@ -156,10 +157,7 @@ export const hostConfig = {
     child: GlyphNode | GlyphTextInstance,
   ): void {
     if (child.type === "raw-text") {
-      const textChild = child as GlyphTextInstance;
-      textChild.parent = parentInstance;
-      parentInstance.rawTextChildren.push(textChild);
-      parentInstance.text = parentInstance.rawTextChildren.map((t) => t.text).join("");
+      glyphAppendTextChild(parentInstance, child as GlyphTextInstance);
     } else {
       glyphAppendChild(parentInstance, child as GlyphNode);
     }
@@ -180,8 +178,22 @@ export const hostConfig = {
     child: GlyphNode | GlyphTextInstance,
     beforeChild: GlyphNode | GlyphTextInstance,
   ): void {
-    if (child.type === "raw-text" || beforeChild.type === "raw-text") return;
-    glyphInsertBefore(parentInstance, child as GlyphNode, beforeChild as GlyphNode);
+    if (child.type === "raw-text") {
+      glyphInsertTextBefore(parentInstance, child as GlyphTextInstance, beforeChild as GlyphChild);
+    } else if (beforeChild.type === "raw-text") {
+      // Insert node before a text child - need to handle allChildren ordering
+      const node = child as GlyphNode;
+      node.parent = parentInstance;
+      parentInstance.children.push(node);
+      const allIdx = parentInstance.allChildren.indexOf(beforeChild as GlyphChild);
+      if (allIdx !== -1) {
+        parentInstance.allChildren.splice(allIdx, 0, node);
+      } else {
+        parentInstance.allChildren.push(node);
+      }
+    } else {
+      glyphInsertBefore(parentInstance, child as GlyphNode, beforeChild as GlyphNode);
+    }
   },
 
   insertInContainerBefore(
@@ -205,14 +217,10 @@ export const hostConfig = {
     child: GlyphNode | GlyphTextInstance,
   ): void {
     if (child.type === "raw-text") {
-      const textChild = child as GlyphTextInstance;
-      textChild.parent = null;
-      const idx = parentInstance.rawTextChildren.indexOf(textChild);
-      if (idx !== -1) parentInstance.rawTextChildren.splice(idx, 1);
-      parentInstance.text = parentInstance.rawTextChildren.map((t) => t.text).join("") || null;
-      return;
+      glyphRemoveTextChild(parentInstance, child as GlyphTextInstance);
+    } else {
+      glyphRemoveChild(parentInstance, child as GlyphNode);
     }
-    glyphRemoveChild(parentInstance, child as GlyphNode);
   },
 
   removeChildFromContainer(

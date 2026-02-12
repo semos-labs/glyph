@@ -1,5 +1,5 @@
-import type { GlyphNode } from "../reconciler/nodes.js";
-import { getInheritedTextStyle, collectTextContent } from "../reconciler/nodes.js";
+import type { GlyphNode, TextSegment } from "../reconciler/nodes.js";
+import { getInheritedTextStyle, collectTextContent, collectStyledSegments } from "../reconciler/nodes.js";
 import type { Cell } from "./framebuffer.js";
 import { Framebuffer } from "./framebuffer.js";
 import { getBorderChars } from "./borders.js";
@@ -205,93 +205,113 @@ function autoContrastFg(explicitColor: Color | undefined, bg: Color | undefined)
   return isLightColor(bg) ? "black" : "white";
 }
 
+/** A character with its associated style for painting */
+interface StyledChar {
+  char: string;
+  style: TextSegment["style"];
+}
+
 function paintText(node: GlyphNode, fb: Framebuffer, clip: ClipRect): void {
   const { innerX, innerY, innerWidth, innerHeight } = node.layout;
   const inherited = getInheritedTextStyle(node);
-  const text = collectTextContent(node);
-  if (!text) return;
-
-  const baseFg = autoContrastFg(inherited.color, inherited.bg);
+  
+  // Collect styled segments from the nested text tree
+  const segments = collectStyledSegments(node, inherited);
+  if (segments.length === 0) return;
+  
   const wrapMode = node.style.wrap ?? "wrap";
   const textAlign = node.style.textAlign ?? "left";
-  const rawLines = text.split("\n");
   
-  // For wrapping, we need to strip ANSI codes to get correct widths
-  // Then re-apply styles when painting
-  const strippedLines = rawLines.map(line => stripAnsi(line));
-  const wrappedStripped = wrapLines(strippedLines, innerWidth, wrapMode);
-
-  // We need to track position in original text to maintain ANSI codes
-  // So we'll wrap the stripped version for layout, but paint from originals
-  // Actually, let's parse ANSI per-line and handle wrapping differently
-
-  for (let lineIdx = 0; lineIdx < wrappedStripped.length && lineIdx < innerHeight; lineIdx++) {
-    // Find which original line this wrapped line came from
-    let origLineIdx = 0;
-    let wrappedCount = 0;
-    for (let i = 0; i < strippedLines.length; i++) {
-      const linesFromThis = wrapLines([strippedLines[i]!], innerWidth, wrapMode).length;
-      if (lineIdx < wrappedCount + linesFromThis) {
-        origLineIdx = i;
-        break;
+  // Build a flat array of styled characters, preserving style per character
+  // Also track newlines for proper line handling
+  const styledChars: StyledChar[] = [];
+  const lineBreaks: number[] = []; // Indices where newlines occur
+  
+  for (const segment of segments) {
+    // Parse ANSI codes within the segment text
+    const ansiSegments = parseAnsi(segment.text);
+    
+    for (const ansiSeg of ansiSegments) {
+      for (const char of ansiSeg.text) {
+        if (char === "\n") {
+          lineBreaks.push(styledChars.length);
+        } else {
+          // Merge segment style with ANSI style (ANSI takes precedence)
+          const mergedStyle: TextSegment["style"] = {
+            color: ansiSeg.style.fg ?? segment.style.color,
+            bg: ansiSeg.style.bg ?? segment.style.bg,
+            bold: ansiSeg.style.bold ?? segment.style.bold,
+            dim: ansiSeg.style.dim ?? segment.style.dim,
+            italic: ansiSeg.style.italic ?? segment.style.italic,
+            underline: ansiSeg.style.underline ?? segment.style.underline,
+          };
+          styledChars.push({ char, style: mergedStyle });
+        }
       }
-      wrappedCount += linesFromThis;
     }
-
-    const wrappedLine = wrappedStripped[lineIdx]!;
-    const visibleWidth = stringWidth(wrappedLine);
+  }
+  
+  // Split into lines at line breaks
+  const lines: StyledChar[][] = [];
+  let lineStart = 0;
+  for (const breakIdx of lineBreaks) {
+    lines.push(styledChars.slice(lineStart, breakIdx));
+    lineStart = breakIdx;
+  }
+  lines.push(styledChars.slice(lineStart)); // Last line (or only line if no breaks)
+  
+  // Wrap each line and track styled chars
+  const wrappedLines: StyledChar[][] = [];
+  
+  for (const line of lines) {
+    if (line.length === 0) {
+      wrappedLines.push([]);
+      continue;
+    }
+    
+    // Get plain text for wrapping calculation
+    const plainText = line.map(sc => sc.char).join("");
+    const wrapped = wrapLines([plainText], innerWidth, wrapMode);
+    
+    // Map wrapped lines back to styled chars
+    let charIdx = 0;
+    for (const wrappedText of wrapped) {
+      const wrappedLine: StyledChar[] = [];
+      for (const char of wrappedText) {
+        if (charIdx < line.length) {
+          wrappedLine.push(line[charIdx]!);
+          charIdx++;
+        }
+      }
+      wrappedLines.push(wrappedLine);
+    }
+  }
+  
+  // Paint each wrapped line
+  for (let lineIdx = 0; lineIdx < wrappedLines.length && lineIdx < innerHeight; lineIdx++) {
+    const line = wrappedLines[lineIdx]!;
+    const visibleWidth = line.reduce((sum, sc) => sum + stringWidth(sc.char), 0);
+    
     let offsetX = 0;
-
     if (textAlign === "center") {
       offsetX = Math.max(0, Math.floor((innerWidth - visibleWidth) / 2));
     } else if (textAlign === "right") {
       offsetX = Math.max(0, innerWidth - visibleWidth);
     }
-
-    // Parse the original line to get ANSI styles
-    const originalLine = rawLines[origLineIdx]!;
-    const segments = parseAnsi(originalLine);
     
-    // Figure out which characters from the original line are in this wrapped line
-    const subLineIdx = lineIdx - wrappedCount;
-    const wrappedVersions = wrapLines([strippedLines[origLineIdx]!], innerWidth, wrapMode);
-    
-    // Calculate character offset into the stripped line
-    let charOffset = 0;
-    for (let i = 0; i < subLineIdx; i++) {
-      charOffset += wrappedVersions[i]!.length;
-    }
-    const charEnd = charOffset + wrappedLine.length;
-
-    // Paint characters with their ANSI styles
     let col = 0;
-    let segmentCharIdx = 0; // Position in the stripped (visible) text
-    
-    for (const segment of segments) {
-      for (const char of segment.text) {
-        // Check if this character falls within our wrapped line range
-        if (segmentCharIdx >= charOffset && segmentCharIdx < charEnd) {
-          const charWidth = stringWidth(char);
-          if (charWidth > 0) {
-            // Merge ANSI style with inherited style (ANSI takes precedence)
-            const fg = segment.style.fg ?? baseFg;
-            const bg = segment.style.bg ?? inherited.bg;
-            const bold = segment.style.bold ?? inherited.bold;
-            const dim = segment.style.dim ?? inherited.dim;
-            const italic = segment.style.italic ?? inherited.italic;
-            const underline = segment.style.underline ?? inherited.underline;
-            
-            setClipped(
-              fb, clip,
-              innerX + offsetX + col, innerY + lineIdx,
-              char,
-              fg, bg, bold, dim, italic, underline,
-            );
-          }
-          col += stringWidth(char);
-        }
-        segmentCharIdx++;
+    for (const { char, style } of line) {
+      const charWidth = stringWidth(char);
+      if (charWidth > 0) {
+        const fg = autoContrastFg(style.color, style.bg);
+        setClipped(
+          fb, clip,
+          innerX + offsetX + col, innerY + lineIdx,
+          char,
+          fg, style.bg, style.bold, style.dim, style.italic, style.underline,
+        );
       }
+      col += charWidth;
     }
   }
 }

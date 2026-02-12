@@ -52,12 +52,19 @@ export interface ImageProps {
   maxWidth?: number;
   /** Maximum height in cells when autoSize is true */
   maxHeight?: number;
+  /**
+   * Force unload trigger - increment this value to force the image to unload.
+   * Useful when parent component handles Escape or other close actions.
+   * Example: <Image unloadTrigger={unloadCount} ... />
+   */
+  unloadTrigger?: number;
 }
 
 export function Image({
   src,
   width,
   height,
+  unloadTrigger,
   style,
   focusedStyle,
   placeholderStyle,
@@ -98,6 +105,19 @@ export function Image({
 
   const imageName = placeholder || getImageName(src);
   const isRemote = isRemoteUrl(src);
+
+  // Handle unloadTrigger - unload when trigger changes (and image is loaded)
+  const lastUnloadTriggerRef = useRef(unloadTrigger);
+  useEffect(() => {
+    if (unloadTrigger !== undefined && 
+        unloadTrigger !== lastUnloadTriggerRef.current && 
+        state === "loaded") {
+      loadedImageRef.current = null;
+      setComputedDims(null);
+      setState("placeholder");
+    }
+    lastUnloadTriggerRef.current = unloadTrigger;
+  }, [unloadTrigger, state]);
 
   // Update state and notify
   const updateState = useCallback((newState: ImageState) => {

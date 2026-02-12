@@ -112,11 +112,14 @@ function renderKittyGraphics(opts: ImageRenderOptions): string {
   // q=2 - quiet mode (suppress OK response)
   
   let cmd = `a=T,f=100`;
+  // Assign image ID so we can delete it later
+  if (id !== undefined) {
+    cmd += `,i=${id}`;
+  }
   if (dims) {
     cmd += `,s=${dims.width},v=${dims.height}`;
   }
   cmd += `,c=${width},r=${height}`;
-  // Note: chafa doesn't use i= or U=1 outside of tmux
   
   // Kitty protocol uses chunked transmission for large images
   // Each chunk is max 4096 bytes of base64

@@ -97,8 +97,6 @@ export function Image({
   const [layout, setLayout] = useState<LayoutRect | null>(null);
   // Computed dimensions when autoSize is true
   const [computedDims, setComputedDims] = useState<{ width: number; height: number } | null>(null);
-  // Track if image is visible (not scrolled out of view)
-  const [isVisible, setIsVisible] = useState(true);
 
   // Loaded image data and computed dimensions
   const loadedImageRef = useRef<{ data: Buffer; localPath: string; cellWidth: number; cellHeight: number } | null>(null);
@@ -168,11 +166,12 @@ export function Image({
       return;
     }
     
-    // If scroll offset actually changed, hide the image
+    // If scroll offset actually changed, unload the image (same as Escape)
     if (currentScrollOffset !== lastScrollOffsetRef.current) {
       lastScrollOffsetRef.current = currentScrollOffset;
-      setIsVisible(false);
+      loadedImageRef.current = null;
       setComputedDims(null);
+      setState("placeholder");
     }
   }, [scrollViewCtx, currentScrollOffset, state]);
 
@@ -180,11 +179,6 @@ export function Image({
   // Note: We schedule registration on next tick to ensure layout has settled
   useEffect(() => {
     if (!imageOverlayCtx || state !== "loaded" || !loadedImageRef.current || !layout) {
-      return;
-    }
-    
-    // Don't register if hidden due to scroll
-    if (!isVisible) {
       return;
     }
 
@@ -207,7 +201,7 @@ export function Image({
       clearTimeout(timeoutId);
       imageOverlayCtx.unregisterImage(imageId);
     };
-  }, [imageOverlayCtx, state, layout, isVisible, scrollViewCtx]);
+  }, [imageOverlayCtx, state, layout, scrollViewCtx]);
 
   // Load and display image
   const loadAndDisplay = useCallback(async () => {

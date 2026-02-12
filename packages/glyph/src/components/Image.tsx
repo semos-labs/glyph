@@ -8,7 +8,7 @@
 import React, { useContext, useEffect, useRef, useState, useCallback } from "react";
 import type { Style, Key } from "../types/index.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
-import { FocusContext, InputContext, LayoutContext, ImageOverlayContext } from "../hooks/context.js";
+import { FocusContext, InputContext, LayoutContext, ImageOverlayContext, ScrollViewContext } from "../hooks/context.js";
 import type { LayoutRect } from "../types/index.js";
 import { loadImage, getImageName, isRemoteUrl, detectImageFormat, convertToPng } from "../runtime/imageLoader.js";
 import { getImageDimensions } from "../runtime/imageProtocol.js";
@@ -75,10 +75,12 @@ export function Image({
   const inputCtx = useContext(InputContext);
   const layoutCtx = useContext(LayoutContext);
   const imageOverlayCtx = useContext(ImageOverlayContext);
+  const scrollViewCtx = useContext(ScrollViewContext);
 
   const nodeRef = useRef<GlyphNode | null>(null);
   const focusIdRef = useRef<string | null>(null);
   const imageIdRef = useRef<number>(Math.floor(Math.random() * 1000000));
+  const lastScrollOffsetRef = useRef<number>(0);
 
   // Component state
   const [nodeReady, setNodeReady] = useState(false);
@@ -88,6 +90,8 @@ export function Image({
   const [layout, setLayout] = useState<LayoutRect | null>(null);
   // Computed dimensions when autoSize is true
   const [computedDims, setComputedDims] = useState<{ width: number; height: number } | null>(null);
+  // Track if image is visible (not scrolled out of view)
+  const [isVisible, setIsVisible] = useState(true);
 
   // Loaded image data and computed dimensions
   const loadedImageRef = useRef<{ data: Buffer; localPath: string; cellWidth: number; cellHeight: number } | null>(null);
@@ -124,9 +128,52 @@ export function Image({
     return layoutCtx.subscribe(nodeRef.current, setLayout);
   }, [layoutCtx, nodeReady]);
 
-  // Register/update image with overlay system when loaded and layout changes
+  // Track scroll position and hide image when scrolling
+  useEffect(() => {
+    if (!scrollViewCtx) return;
+    
+    // Check scroll position periodically
+    const checkScroll = () => {
+      const bounds = scrollViewCtx.getBounds();
+      const currentOffset = bounds.scrollOffset;
+      
+      // If scroll offset changed, hide the image
+      if (currentOffset !== lastScrollOffsetRef.current) {
+        lastScrollOffsetRef.current = currentOffset;
+        setIsVisible(false);
+        
+        // Re-show after a short delay when scrolling stops
+        return true; // Indicates scroll changed
+      }
+      return false;
+    };
+    
+    // Poll for scroll changes (ScrollView doesn't have a subscription mechanism)
+    const interval = setInterval(() => {
+      const scrolled = checkScroll();
+      if (!scrolled && !isVisible) {
+        // Scrolling stopped, check if image is in viewport
+        const bounds = scrollViewCtx.getBounds();
+        if (layout) {
+          const imageTop = layout.innerY;
+          const imageBottom = layout.innerY + (loadedImageRef.current?.cellHeight ?? 0);
+          const inViewport = imageBottom > bounds.visibleTop && imageTop < bounds.visibleBottom;
+          setIsVisible(inViewport);
+        }
+      }
+    }, 50);
+    
+    return () => clearInterval(interval);
+  }, [scrollViewCtx, layout, isVisible]);
+
+  // Register/update image with overlay system when loaded, visible, and layout changes
   useEffect(() => {
     if (!imageOverlayCtx || state !== "loaded" || !loadedImageRef.current || !layout) return;
+    
+    // Don't register if inside a ScrollView and not visible
+    if (scrollViewCtx && !isVisible) {
+      return;
+    }
 
     const { data, cellWidth, cellHeight } = loadedImageRef.current;
     const imageId = imageIdRef.current;
@@ -143,7 +190,7 @@ export function Image({
     return () => {
       imageOverlayCtx.unregisterImage(imageId);
     };
-  }, [imageOverlayCtx, state, layout]);
+  }, [imageOverlayCtx, state, layout, scrollViewCtx, isVisible]);
 
   // Load and display image
   const loadAndDisplay = useCallback(async () => {
@@ -220,6 +267,17 @@ export function Image({
 
         if (targetWidth <= 0 || targetHeight <= 0) {
           throw new Error("Image area too small");
+        }
+
+        // Apply hard limit: images should not exceed 30x6 cells
+        const MAX_IMAGE_WIDTH = 30;
+        const MAX_IMAGE_HEIGHT = 6;
+        if (targetWidth > MAX_IMAGE_WIDTH || targetHeight > MAX_IMAGE_HEIGHT) {
+          const scaleX = MAX_IMAGE_WIDTH / targetWidth;
+          const scaleY = MAX_IMAGE_HEIGHT / targetHeight;
+          const scale = Math.min(scaleX, scaleY);
+          targetWidth = Math.max(1, Math.round(targetWidth * scale));
+          targetHeight = Math.max(1, Math.round(targetHeight * scale));
         }
 
         // Store loaded image with target box dimensions

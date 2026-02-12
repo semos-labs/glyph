@@ -129,7 +129,7 @@ export function Image({
   }, [layoutCtx, nodeReady]);
 
   // Track scroll position and hide image when user scrolls
-  // Run on every render to check if scroll offset changed
+  // Only hide when state is "loaded" - don't hide during loading or before first load
   const currentScrollOffset = scrollViewCtx?.getBounds().scrollOffset ?? 0;
   
   useEffect(() => {
@@ -141,13 +141,20 @@ export function Image({
       return;
     }
     
+    // Only hide if image is loaded - don't interfere with loading process
+    if (state !== "loaded") {
+      // Update ref but don't hide
+      lastScrollOffsetRef.current = currentScrollOffset;
+      return;
+    }
+    
     // If scroll offset actually changed, hide the image
     if (currentScrollOffset !== lastScrollOffsetRef.current) {
       lastScrollOffsetRef.current = currentScrollOffset;
       setIsVisible(false);
       setComputedDims(null);
     }
-  }, [scrollViewCtx, currentScrollOffset]);
+  }, [scrollViewCtx, currentScrollOffset, state]);
 
   // Register/update image with overlay system when loaded and layout changes
   // Note: We schedule registration on next tick to ensure layout has settled

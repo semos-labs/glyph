@@ -40,7 +40,7 @@ Build real terminal applications with React. Glyph provides a full component mod
 | | |
 |---|---|
 | **Flexbox Layout** | Full CSS-like flexbox via Yoga &mdash; rows, columns, wrapping, alignment, gaps, padding |
-| **Rich Components** | Box, Text, Input, Button, Checkbox, Radio, Select, ScrollView, List, Menu, Progress, Spinner, Toasts, Dialogs, Portal, JumpNav |
+| **Rich Components** | Box, Text, Input, Button, Checkbox, Radio, Select, ScrollView, List, Menu, Progress, Spinner, Image, Toasts, Dialogs, Portal, JumpNav |
 | **Focus System** | Tab navigation, focus scopes, focus trapping for modals, JumpNav quick-jump hints |
 | **Keyboard Input** | `useInput` hook, declarative `<Keybind>` component, vim-style bindings |
 | **Smart Rendering** | Double-buffered framebuffer with character-level diffing &mdash; only changed cells are written |
@@ -455,6 +455,65 @@ Animated spinner with configurable frames. Cleans up timers on unmount.
 <Spinner frames={["|", "/", "-", "\\"]} intervalMs={100} />
 ```
 
+### `<Image>`
+
+Display images in the terminal with inline rendering or OS preview. Supports local files and remote URLs.
+
+```tsx
+<Image
+  src="./photo.jpg"
+  style={{ width: 40, height: 15 }}
+  autoLoad
+/>
+
+<Image
+  src="https://images.unsplash.com/photo-123"
+  style={{ flexGrow: 1 }}
+/>
+```
+
+**How it works:**
+1. By default, shows a placeholder with the image name
+2. Focus the component and press `Space` to load
+3. Image renders inline (Kitty/iTerm2 protocol) or opens OS preview (Quick Look on macOS)
+4. Press `Escape` to return to placeholder, `R` to reload
+
+**Props:**
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `src` | `string` | required | Local path or remote URL |
+| `width` | `number` | auto | Fixed width in cells |
+| `height` | `number` | auto | Fixed height in cells |
+| `style` | `Style` | `{}` | Container style (flexbox) |
+| `focusedStyle` | `Style` | `{}` | Style when focused |
+| `inline` | `boolean` | `true` | Allow inline terminal rendering |
+| `autoLoad` | `boolean` | `false` | Load automatically on mount |
+| `focusable` | `boolean` | `true` | Whether the component is focusable |
+| `placeholder` | `string` | filename | Custom placeholder text |
+| `onStateChange` | `(state) => void` | - | Called when state changes |
+| `onError` | `(error) => void` | - | Called on error |
+
+**Terminal support:**
+- **Inline rendering:** Kitty, Ghostty, WezTerm, iTerm2 (via Kitty Graphics or iTerm2 protocol)
+- **OS preview fallback:** Quick Look (macOS), xdg-open (Linux), start (Windows)
+
+**Remote images** are automatically downloaded and cached. Supported formats: PNG, JPEG, GIF, WebP.
+
+```tsx
+// Inline disabled - always use OS preview
+<Image src="./large-photo.jpg" inline={false} />
+
+// With state callback
+<Image
+  src={imageUrl}
+  onStateChange={(state) => {
+    // "placeholder" | "loading" | "loaded" | "error" | "preview"
+    console.log("Image state:", state);
+  }}
+/>
+```
+
 ### `<ToastHost>` + `useToast()`
 
 Lightweight toast notifications rendered via Portal. Wrap your app in `<ToastHost>`, then push toasts from anywhere with `useToast()`.
@@ -763,6 +822,7 @@ Interactive examples are included in the repo. Each demonstrates different compo
 | **dialog-demo** | Alert and Confirm dialogs | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/dialog-demo) |
 | **jump-nav** | Quick navigation with keyboard hints | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/jump-nav) |
 | **ansi-text** | ANSI escape codes and colored output | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/ansi-text) |
+| **image** | Inline images and OS preview | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/image) |
 | **showcase** | Progress bars, Spinners, Toasts | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/showcase) |
 | **dashboard** | Full task manager (all components) | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/dashboard) |
 

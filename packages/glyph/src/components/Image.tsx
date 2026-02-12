@@ -11,7 +11,7 @@ import type { GlyphNode } from "../reconciler/nodes.js";
 import { FocusContext, InputContext, LayoutContext, ImageOverlayContext } from "../hooks/context.js";
 import type { LayoutRect } from "../types/index.js";
 import { loadImage, getImageName, isRemoteUrl, detectImageFormat, convertToPng } from "../runtime/imageLoader.js";
-import { getImageDimensions, calculateCellDimensions } from "../runtime/imageProtocol.js";
+import { getImageDimensions } from "../runtime/imageProtocol.js";
 import { supportsInlineImages } from "../runtime/terminalCapabilities.js";
 import { openImagePreview } from "../runtime/osPreview.js";
 
@@ -160,12 +160,7 @@ export function Image({
           imageData = pngData;
         }
         
-        // Calculate dimensions for inline rendering
-        const dims = getImageDimensions(imageData);
-        if (!dims) {
-          throw new Error("Could not determine image dimensions");
-        }
-
+        // Get target dimensions - Kitty handles aspect ratio preservation
         const targetWidth = width ?? layout.innerWidth;
         const targetHeight = height ?? layout.innerHeight;
 
@@ -173,19 +168,13 @@ export function Image({
           throw new Error("Image area too small");
         }
 
-        const cellDims = calculateCellDimensions(
-          dims.width,
-          dims.height,
-          targetWidth,
-          targetHeight
-        );
-
-        // Store loaded image with computed dimensions (use converted PNG data)
+        // Store loaded image with target box dimensions
+        // Kitty protocol preserves aspect ratio when given source dims (s,v) and target cells (c,r)
         loadedImageRef.current = {
           data: imageData,
           localPath: image.localPath,
-          cellWidth: cellDims.width,
-          cellHeight: cellDims.height,
+          cellWidth: targetWidth,
+          cellHeight: targetHeight,
         };
 
         updateState("loaded");

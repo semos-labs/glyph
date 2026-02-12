@@ -1,0 +1,12 @@
+{
+  "name": "virtualized-list-example",
+  "private": true,
+  "scripts": {
+    "dev": "bun src/main.tsx",
+    "start": "bun src/main.tsx"
+  },
+  "dependencies": {
+    "@nick-skriabin/glyph": "workspace:*",
+    "react": "^19.0.0"
+  }
+}

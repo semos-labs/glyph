@@ -276,6 +276,18 @@ Set `focusable={false}` if you want the ScrollView to only scroll when a child e
 </ScrollView>
 ```
 
+**Virtualization:** For large lists (1000+ items), add the `virtualize` prop to only render visible children. Heights are auto-measured — no configuration needed:
+
+```tsx
+<ScrollView virtualize style={{ height: 20, border: "single" }}>
+  {items.map((item) => (
+    <Text key={item.id}>{item.name}</Text>
+  ))}
+</ScrollView>
+```
+
+This renders only visible items + a small overscan buffer, making it fast even with 10,000+ items. Use `estimatedItemHeight` prop if your items are taller than 1 line (default).
+
 ### `<List>`
 
 Keyboard-navigable selection list with a render callback.
@@ -834,6 +846,7 @@ Interactive examples are included in the repo. Each demonstrates different compo
 | **jump-nav** | Quick navigation with keyboard hints | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/jump-nav) |
 | **ansi-text** | ANSI escape codes and colored output | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/ansi-text) |
 | **image** | Inline images and OS preview | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/image) |
+| **virtualized-list** | Virtualized ScrollView with 10k+ items | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/virtualized-list) |
 | **showcase** | Progress bars, Spinners, Toasts | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/showcase) |
 | **dashboard** | Full task manager (all components) | [View →](https://github.com/nick-skriabin/glyph/tree/main/examples/dashboard) |
 

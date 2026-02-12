@@ -19,7 +19,7 @@ export type { PortalProps } from "./components/Portal.js";
 export { Button } from "./components/Button.js";
 export type { ButtonProps } from "./components/Button.js";
 export { ScrollView } from "./components/ScrollView.js";
-export type { ScrollViewProps } from "./components/ScrollView.js";
+export type { ScrollViewProps, VisibleRange } from "./components/ScrollView.js";
 export { List } from "./components/List.js";
 export type { ListProps, ListItemInfo } from "./components/List.js";
 export { Menu } from "./components/Menu.js";

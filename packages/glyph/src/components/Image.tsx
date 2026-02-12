@@ -80,7 +80,7 @@ export function Image({
   const nodeRef = useRef<GlyphNode | null>(null);
   const focusIdRef = useRef<string | null>(null);
   const imageIdRef = useRef<number>(Math.floor(Math.random() * 1000000));
-  const lastScrollOffsetRef = useRef<number>(0);
+  const lastScrollOffsetRef = useRef<number | null>(null); // null = not initialized yet
 
   // Component state
   const [nodeReady, setNodeReady] = useState(false);
@@ -139,10 +139,17 @@ export function Image({
     const bounds = scrollViewCtx.getBounds();
     const currentOffset = bounds.scrollOffset;
     
+    // Initialize on first check
+    if (lastScrollOffsetRef.current === null) {
+      lastScrollOffsetRef.current = currentOffset;
+      return;
+    }
+    
     // If scroll offset changed since last check, hide the image permanently
     if (currentOffset !== lastScrollOffsetRef.current) {
       lastScrollOffsetRef.current = currentOffset;
       setIsVisible(false);
+      setComputedDims(null); // Reset box size
     }
   }); // Run on every render to detect scroll changes
 
@@ -307,6 +314,7 @@ export function Image({
       // Escape to clear inline image and return to placeholder
       if (key.name === "escape" && state === "loaded") {
         loadedImageRef.current = null;
+        setComputedDims(null); // Reset box size
         updateState("placeholder");
         return true;
       }

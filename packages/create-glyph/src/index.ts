@@ -337,15 +337,12 @@ function main() {
   const pm = detectPackageManager();
 
   console.log();
-  console.log(`  ${cyan("◆")} ${bold("Creating")} ${green(dirName)}${dim("...")}`);
 
   // Check if directory already exists and has stuff in it
   if (fs.existsSync(targetDir)) {
     const entries = fs.readdirSync(targetDir);
     if (entries.length > 0) {
-      console.log(
-        `\n  ${red("✗")} Directory ${bold(dirName)} already exists and is not empty.\n`,
-      );
+      console.log(`  ${red("✗")} Directory ${bold(dirName)} already exists and is not empty.\n`);
       process.exit(1);
     }
   }
@@ -362,35 +359,26 @@ function main() {
   ];
 
   for (const [filePath, content] of files) {
-    const fullPath = path.join(targetDir, filePath);
-    fs.writeFileSync(fullPath, content, "utf-8");
-    console.log(`  ${dim("├")} ${green("+")} ${filePath}`);
+    fs.writeFileSync(path.join(targetDir, filePath), content, "utf-8");
   }
 
-  // Install dependencies
-  console.log();
-  console.log(`  ${cyan("◆")} ${bold("Installing dependencies")}${dim("...")}`);
-  console.log();
+  console.log(`  ${green("✓")} Created project structure`);
 
+  // Install dependencies
   try {
     execSync(getInstallCommand(pm), {
       cwd: targetDir,
-      stdio: "inherit",
+      stdio: "pipe",
     });
-    console.log();
-    console.log(`  ${green("✓")} Dependencies installed!`);
+    console.log(`  ${green("✓")} Installed dependencies`);
   } catch {
-    console.log();
-    console.log(`  ${yellow("⚠")} Install failed. You can run it manually:`);
-    console.log(`    ${cyan("cd")} ${dirName} && ${cyan(getInstallCommand(pm))}`);
+    console.log(`  ${yellow("⚠")} Could not install dependencies — run ${cyan(getInstallCommand(pm))} manually`);
   }
 
+  console.log(`  ${green("✓")} Ready to build something great`);
   console.log();
-  console.log(`  ${green("✓")} ${bold(dirName)} is ready! Run this to get started:`);
-  console.log();
-  console.log(`    ${bold(cyan(`cd ${dirName} && ${getRunCommand(pm)}`))}`);
-  console.log();
-  console.log(`  ${dim("Happy hacking! ✦")}`);
+  console.log(`  ${dim("Next:")}`);
+  console.log(`  ${bold(cyan(`cd ${dirName} && ${getRunCommand(pm)}`))}`);
   console.log();
 }
 

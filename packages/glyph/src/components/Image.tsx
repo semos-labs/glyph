@@ -132,10 +132,13 @@ export function Image({
     return focusCtx.register(focusIdRef.current, nodeRef.current, false);
   }, [focusCtx, focusable, nodeReady]);
 
-  // Handle disabled state (skip in tab order)
+  // Handle disabled state (skip in tab order + release focus if held)
   useEffect(() => {
     if (!focusCtx || !focusIdRef.current) return;
     focusCtx.setSkippable(focusIdRef.current, !!disabled);
+    if (disabled && focusCtx.focusedId === focusIdRef.current) {
+      focusCtx.blur();
+    }
   }, [focusCtx, disabled]);
 
   // Subscribe to focus changes

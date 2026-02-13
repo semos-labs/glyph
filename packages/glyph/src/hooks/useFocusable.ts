@@ -93,10 +93,13 @@ export function useFocusable(options: UseFocusableOptions = {}): UseFocusableRes
     return focusCtx.register(focusIdRef.current, nodeRef.current);
   }, [focusCtx]);
   
-  // Handle disabled state (mark as skippable in tab order)
+  // Handle disabled state (mark as skippable + release focus if held)
   useEffect(() => {
     if (!focusCtx || !focusIdRef.current) return;
     focusCtx.setSkippable(focusIdRef.current, !!disabled);
+    if (disabled && focusCtx.focusedId === focusIdRef.current) {
+      focusCtx.blur();
+    }
   }, [focusCtx, disabled]);
   
   // Subscribe to focus changes

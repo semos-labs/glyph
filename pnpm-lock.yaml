@@ -15,6 +15,19 @@ importers:
         specifier: ^5.5
         version: 5.9.3
 
+  examples/ansi-text:
+    dependencies:
+      '@nick-skriabin/glyph':
+        specifier: workspace:*
+        version: link:../../packages/glyph
+      react:
+        specifier: ^19.1.0
+        version: 19.2.4
+    devDependencies:
+      '@types/react':
+        specifier: ^19.1.0
+        version: 19.2.11
+
   examples/basic-layout:
     dependencies:
       '@nick-skriabin/glyph':
@@ -37,7 +50,143 @@ importers:
         specifier: ^5.5
         version: 5.9.3
 
+  examples/dashboard:
+    dependencies:
+      '@nick-skriabin/glyph':
+        specifier: workspace:*
+        version: link:../../packages/glyph
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.31
+      '@types/react':
+        specifier: ^19
+        version: 19.2.11
+      tsx:
+        specifier: ^4
+        version: 4.21.0
+      typescript:
+        specifier: ^5.5
+        version: 5.9.3
+
+  examples/dialog-demo:
+    dependencies:
+      '@nick-skriabin/glyph':
+        specifier: workspace:*
+        version: link:../../packages/glyph
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.31
+      '@types/react':
+        specifier: ^19
+        version: 19.2.11
+      tsx:
+        specifier: ^4
+        version: 4.21.0
+      typescript:
+        specifier: ^5.5
+        version: 5.9.3
+
+  examples/forms-demo:
+    dependencies:
+      '@nick-skriabin/glyph':
+        specifier: workspace:*
+        version: link:../../packages/glyph
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.31
+      '@types/react':
+        specifier: ^19
+        version: 19.2.11
+      tsx:
+        specifier: ^4
+        version: 4.21.0
+      typescript:
+        specifier: ^5.5
+        version: 5.9.3
+
+  examples/image:
+    dependencies:
+      '@nick-skriabin/glyph':
+        specifier: workspace:*
+        version: link:../../packages/glyph
+      react:
+        specifier: ^19.1.0
+        version: 19.2.4
+    devDependencies:
+      '@types/react':
+        specifier: ^19.1.4
+        version: 19.2.11
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  examples/jump-nav:
+    dependencies:
+      '@nick-skriabin/glyph':
+        specifier: workspace:*
+        version: link:../../packages/glyph
+      react:
+        specifier: ^19.1.0
+        version: 19.2.4
+    devDependencies:
+      tsx:
+        specifier: ^4.19.3
+        version: 4.21.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  examples/key-test:
+    dependencies:
+      '@nick-skriabin/glyph':
+        specifier: workspace:*
+        version: link:../../packages/glyph
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.11
+      tsx:
+        specifier: ^4.19.4
+        version: 4.21.0
+
   examples/list-demo:
+    dependencies:
+      '@nick-skriabin/glyph':
+        specifier: workspace:*
+        version: link:../../packages/glyph
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.31
+      '@types/react':
+        specifier: ^19
+        version: 19.2.11
+      tsx:
+        specifier: ^4
+        version: 4.21.0
+      typescript:
+        specifier: ^5.5
+        version: 5.9.3
+
+  examples/masked-input:
     dependencies:
       '@nick-skriabin/glyph':
         specifier: workspace:*
@@ -125,6 +274,28 @@ importers:
         specifier: ^5.5
         version: 5.9.3
 
+  examples/select-demo:
+    dependencies:
+      '@nick-skriabin/glyph':
+        specifier: workspace:*
+        version: link:../../packages/glyph
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.31
+      '@types/react':
+        specifier: ^19
+        version: 19.2.11
+      tsx:
+        specifier: ^4
+        version: 4.21.0
+      typescript:
+        specifier: ^5.5
+        version: 5.9.3
+
   examples/showcase:
     dependencies:
       '@nick-skriabin/glyph':
@@ -143,6 +314,36 @@ importers:
       tsx:
         specifier: ^4
         version: 4.21.0
+      typescript:
+        specifier: ^5.5
+        version: 5.9.3
+
+  examples/styled-text:
+    dependencies:
+      '@nick-skriabin/glyph':
+        specifier: workspace:*
+        version: link:../../packages/glyph
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+
+  examples/virtualized-list:
+    dependencies:
+      '@nick-skriabin/glyph':
+        specifier: workspace:*
+        version: link:../../packages/glyph
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+
+  packages/create-glyph:
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.31
+      tsup:
+        specifier: ^8
+        version: 8.5.1(tsx@4.21.0)(typescript@5.9.3)
       typescript:
         specifier: ^5.5
         version: 5.9.3

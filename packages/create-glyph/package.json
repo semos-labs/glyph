@@ -1,0 +1,36 @@
+{
+  "name": "@semos/create-glyph",
+  "version": "0.1.71",
+  "description": "Scaffold a new Glyph terminal UI app",
+  "type": "module",
+  "bin": {
+    "create-glyph": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsup": "^8",
+    "typescript": "^5.5"
+  },
+  "keywords": [
+    "glyph",
+    "create",
+    "scaffold",
+    "terminal",
+    "tui",
+    "cli",
+    "react"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nick-skriabin/glyph.git"
+  }
+}

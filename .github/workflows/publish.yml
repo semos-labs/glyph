@@ -30,17 +30,25 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Publishing version: $VERSION"
 
-      - name: Update package version
+      - name: Update package versions
         run: |
           cd packages/glyph
           npm pkg set version=${{ steps.version.outputs.version }}
           cat package.json | grep version
 
-      - name: Build
+          cd ../create-glyph
+          npm pkg set version=${{ steps.version.outputs.version }}
+          cat package.json | grep version
+
+      - name: Build glyph
         run: bun run build
         working-directory: packages/glyph
 
-      - name: Copy README to package
+      - name: Build create-glyph
+        run: bun run build
+        working-directory: packages/create-glyph
+
+      - name: Copy README to glyph package
         run: cp README.md packages/glyph/README.md
 
       - name: Setup Node.js for npm publish
@@ -49,8 +57,14 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Publish to npm
+      - name: Publish glyph
         run: npm publish --provenance --access public
         working-directory: packages/glyph
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish create-glyph
+        run: npm publish --provenance --access public
+        working-directory: packages/create-glyph
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

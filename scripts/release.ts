@@ -70,17 +70,26 @@ async function main() {
   const newVersion = `v${major}.${minor}.${patch}`;
   console.log(`📦 Bumping ${bumpType} version: ${latestTag} → ${newVersion}\n`);
 
-  // 4. Update package.json version
-  console.log("📝 Updating package.json...");
-  const packageJsonPath = "./packages/glyph/package.json";
-  const packageJson = await Bun.file(packageJsonPath).json();
-  packageJson.version = `${major}.${minor}.${patch}`;
-  await Bun.write(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n");
-  console.log(`   Updated version to ${major}.${minor}.${patch}\n`);
+  // 4. Update package.json versions (glyph + create-glyph)
+  console.log("📝 Updating package versions...");
+  const versionStr = `${major}.${minor}.${patch}`;
+
+  const packagePaths = [
+    "./packages/glyph/package.json",
+    "./packages/create-glyph/package.json",
+  ];
+
+  for (const pkgPath of packagePaths) {
+    const pkg = await Bun.file(pkgPath).json();
+    pkg.version = versionStr;
+    await Bun.write(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+    console.log(`   ${pkg.name} → ${versionStr}`);
+  }
+  console.log();
 
   // 5. Commit the version bump
   console.log("💾 Committing version bump...");
-  await $`git add ${packageJsonPath}`;
+  await $`git add ${packagePaths.join(" ")}`;
   await $`git commit -m "chore: bump version to ${newVersion}"`;
   console.log("✅ Committed\n");
 

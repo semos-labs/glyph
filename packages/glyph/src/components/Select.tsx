@@ -41,6 +41,8 @@ export interface SelectProps {
   maxVisible?: number;
   /** Enable type-to-filter when dropdown is open (default: true) */
   searchable?: boolean;
+  /** Force dropdown open direction: "up", "down", or "auto" (default: "auto") */
+  openDirection?: "up" | "down" | "auto";
   /** Disabled state */
   disabled?: boolean;
 }
@@ -57,6 +59,7 @@ export const Select = forwardRef<SelectHandle, SelectProps>(
     highlightColor = "cyan",
     maxVisible = 8,
     searchable = true,
+    openDirection = "auto",
     disabled,
   }, ref) {
   const focusCtx = useContext(FocusContext);
@@ -486,8 +489,12 @@ export const Select = forwardRef<SelectHandle, SelectProps>(
       spaceAbove = triggerLayout.y;
     }
     
-    // Open upward if not enough space below but enough above
-    const openUpward = spaceBelow < dropdownHeight && spaceAbove >= dropdownHeight;
+    // Determine open direction
+    const openUpward = openDirection === "up" 
+      ? true 
+      : openDirection === "down" 
+        ? false 
+        : spaceBelow < dropdownHeight && spaceAbove >= dropdownHeight;
     
     const dropdownTop = openUpward 
       ? -(dropdownHeight) 

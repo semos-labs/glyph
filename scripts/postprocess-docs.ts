@@ -34,15 +34,14 @@ function cleanTitle(raw: string): string {
   return raw
     .replace(/^(Variable|Function|Interface|Type Alias|Class|Enum|Namespace):\s*/i, "")
     .replace(/\(\)$/, "") // strip trailing ()
+    .replace(/\\([<>])/g, "$1") // unescape \< \> from TypeDoc generics
     .trim();
 }
 
 function escapeYaml(s: string): string {
-  // Wrap in quotes if it contains special chars
-  if (/[:#\[\]{}&*!|>'"@`,%]/.test(s) || s.startsWith("-") || s.startsWith("?")) {
-    return `"${s.replace(/"/g, '\\"')}"`;
-  }
-  return s;
+  // Always wrap in single quotes for safety — handles <, >, :, #, etc.
+  // Single-quote escaping: double any internal single quotes
+  return `'${s.replace(/'/g, "''")}'`;
 }
 
 let processed = 0;

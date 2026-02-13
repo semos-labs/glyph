@@ -17,6 +17,8 @@ on:
     paths:
       - "packages/glyph/src/**"
       - "typedoc.json"
+      - "scripts/postprocess-docs.ts"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 jobs:

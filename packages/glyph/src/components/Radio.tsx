@@ -1,5 +1,5 @@
-import React, { useContext, useEffect, useRef, useState, useCallback } from "react";
-import type { Style, Key } from "../types/index.js";
+import React, { useContext, useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
+import type { Style, Key, RadioHandle } from "../types/index.js";
 import { FocusContext, InputContext } from "../hooks/context.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 
@@ -39,7 +39,7 @@ export interface RadioProps<T = string> {
   unselectedChar?: string;
 }
 
-export function Radio<T = string>({
+function RadioInner<T = string>({
   items,
   value,
   onChange,
@@ -52,7 +52,8 @@ export function Radio<T = string>({
   gap = 0,
   selectedChar = "●",
   unselectedChar = "○",
-}: RadioProps<T>): React.JSX.Element {
+  forwardedRef,
+}: RadioProps<T> & { forwardedRef?: React.Ref<RadioHandle<T>> }): React.JSX.Element {
   const focusCtx = useContext(FocusContext);
   const inputCtx = useContext(InputContext);
   const nodeRef = useRef<GlyphNode | null>(null);
@@ -63,6 +64,26 @@ export function Radio<T = string>({
   // Track when node is mounted with a valid focusId
   const [nodeReady, setNodeReady] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+
+  // Expose imperative handle
+  useImperativeHandle(forwardedRef, () => ({
+    focus() {
+      if (focusCtx && focusIdRef.current) {
+        focusCtx.requestFocus(focusIdRef.current);
+      }
+    },
+    blur() {
+      if (focusCtx) {
+        focusCtx.blur();
+      }
+    },
+    get isFocused() {
+      return isFocused;
+    },
+    get value() {
+      return value;
+    },
+  }), [focusCtx, isFocused, value]);
   const [highlightedIndex, setHighlightedIndex] = useState(() => {
     // Initialize to the selected item or first enabled item
     const selectedIdx = items.findIndex((item) => item.value === value);
@@ -223,3 +244,14 @@ export function Radio<T = string>({
     ...radioItems,
   );
 }
+
+/**
+ * Radio group component with imperative handle support.
+ * Use `ref` to get `{ focus, blur, isFocused, value }`.
+ */
+export const Radio = forwardRef(function Radio<T = string>(
+  props: RadioProps<T>,
+  ref: React.Ref<RadioHandle<T>>,
+) {
+  return React.createElement(RadioInner, { ...props, forwardedRef: ref } as any);
+}) as <T = string>(props: RadioProps<T> & React.RefAttributes<RadioHandle<T>>) => React.JSX.Element;

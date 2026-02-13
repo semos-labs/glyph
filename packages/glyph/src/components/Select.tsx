@@ -5,9 +5,11 @@ import React, {
   useState,
   useCallback,
   useMemo,
+  forwardRef,
+  useImperativeHandle,
 } from "react";
 import type { ReactNode } from "react";
-import type { Style, Key, Color } from "../types/index.js";
+import type { Style, Key, Color, SelectHandle } from "../types/index.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 import { FocusContext, InputContext, AppContext, ScrollViewContext } from "../hooks/context.js";
 import { useLayout } from "../hooks/useLayout.js";
@@ -43,19 +45,20 @@ export interface SelectProps {
   disabled?: boolean;
 }
 
-export function Select({
-  items,
-  value,
-  onChange,
-  placeholder = "Select...",
-  style,
-  focusedStyle,
-  dropdownStyle,
-  highlightColor = "cyan",
-  maxVisible = 8,
-  searchable = true,
-  disabled,
-}: SelectProps): React.JSX.Element {
+export const Select = forwardRef<SelectHandle, SelectProps>(
+  function Select({
+    items,
+    value,
+    onChange,
+    placeholder = "Select...",
+    style,
+    focusedStyle,
+    dropdownStyle,
+    highlightColor = "cyan",
+    maxVisible = 8,
+    searchable = true,
+    disabled,
+  }, ref) {
   const focusCtx = useContext(FocusContext);
   const inputCtx = useContext(InputContext);
   const appCtx = useContext(AppContext);
@@ -69,6 +72,29 @@ export function Select({
   const [nodeReady, setNodeReady] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+
+  // Expose imperative handle
+  useImperativeHandle(ref, () => ({
+    focus() {
+      if (focusCtx && focusIdRef.current) {
+        focusCtx.requestFocus(focusIdRef.current);
+      }
+    },
+    blur() {
+      if (focusCtx) {
+        focusCtx.blur();
+      }
+    },
+    get isFocused() {
+      return isFocused;
+    },
+    get value() {
+      return value;
+    },
+    get isOpen() {
+      return isOpen;
+    },
+  }), [focusCtx, isFocused, value, isOpen]);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [searchText, setSearchText] = useState("");
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -529,4 +555,5 @@ export function Select({
     // Dropdown overlay
     dropdownElement,
   );
-}
+  }
+);

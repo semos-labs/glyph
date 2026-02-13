@@ -76,4 +76,14 @@ export type {
   BorderStyle,
   WrapMode,
   TextAlign,
+  // Imperative handle types for refs
+  FocusableHandle,
+  ButtonHandle,
+  InputHandle,
+  SelectHandle,
+  CheckboxHandle,
+  RadioHandle,
+  ListHandle,
+  ImageHandle,
+  TextHandle,
 } from "./types/index.js";

@@ -1,6 +1,6 @@
-import React, { useContext, useEffect, useRef, useState, useCallback } from "react";
+import React, { useContext, useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import type { ReactNode } from "react";
-import type { Style, Key } from "../types/index.js";
+import type { Style, Key, ListHandle } from "../types/index.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 import { FocusContext, InputContext } from "../hooks/context.js";
 
@@ -31,17 +31,18 @@ export interface ListProps {
   focusable?: boolean;
 }
 
-export function List({
-  count,
-  renderItem,
-  selectedIndex: controlledIndex,
-  onSelectionChange,
-  onSelect,
-  defaultSelectedIndex = 0,
-  disabledIndices,
-  style,
-  focusable = true,
-}: ListProps): React.JSX.Element {
+export const List = forwardRef<ListHandle, ListProps>(
+  function List({
+    count,
+    renderItem,
+    selectedIndex: controlledIndex,
+    onSelectionChange,
+    onSelect,
+    defaultSelectedIndex = 0,
+    disabledIndices,
+    style,
+    focusable = true,
+  }, ref) {
   const isControlled = controlledIndex !== undefined;
   const [internalIndex, setInternalIndex] = useState(defaultSelectedIndex);
   const selectedIndex = isControlled ? controlledIndex : internalIndex;
@@ -56,6 +57,26 @@ export function List({
   // Track when node is mounted with a valid focusId
   const [nodeReady, setNodeReady] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+
+  // Expose imperative handle
+  useImperativeHandle(ref, () => ({
+    focus() {
+      if (focusCtx && focusIdRef.current) {
+        focusCtx.requestFocus(focusIdRef.current);
+      }
+    },
+    blur() {
+      if (focusCtx) {
+        focusCtx.blur();
+      }
+    },
+    get isFocused() {
+      return isFocused;
+    },
+    get selectedIndex() {
+      return selectedIndex;
+    },
+  }), [focusCtx, isFocused, selectedIndex]);
   const lastKeyRef = useRef<string | null>(null);
 
   const setIndex = useCallback(
@@ -200,4 +221,5 @@ export function List({
     },
     ...items,
   );
-}
+  }
+);

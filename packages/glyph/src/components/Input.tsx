@@ -1,5 +1,5 @@
-import React, { useState, useContext, useEffect, useRef } from "react";
-import type { Style, Key } from "../types/index.js";
+import React, { useState, useContext, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
+import type { Style, Key, InputHandle } from "../types/index.js";
 import { InputContext, FocusContext, LayoutContext } from "../hooks/context.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 import { wrapLines } from "../layout/textMeasure.js";
@@ -186,7 +186,8 @@ export interface InputProps {
   type?: InputType;
 }
 
-export function Input(props: InputProps): React.JSX.Element {
+export const Input = forwardRef<InputHandle, InputProps>(
+  function Input(props, ref) {
   const {
     value: controlledValue,
     defaultValue = "",
@@ -214,6 +215,26 @@ export function Input(props: InputProps): React.JSX.Element {
 
   const isControlled = controlledValue !== undefined;
   const value = isControlled ? controlledValue : internalValue;
+
+  // Expose imperative handle
+  useImperativeHandle(ref, () => ({
+    focus() {
+      if (focusCtx && focusIdRef.current) {
+        focusCtx.requestFocus(focusIdRef.current);
+      }
+    },
+    blur() {
+      if (focusCtx) {
+        focusCtx.blur();
+      }
+    },
+    get isFocused() {
+      return isFocused;
+    },
+    get value() {
+      return workingValueRef.current;
+    },
+  }), [focusCtx, isFocused]);
 
   // Subscribe to layout changes to get innerWidth for visual line navigation
   useEffect(() => {
@@ -612,4 +633,5 @@ export function Input(props: InputProps): React.JSX.Element {
       }
     },
   });
-}
+  }
+);

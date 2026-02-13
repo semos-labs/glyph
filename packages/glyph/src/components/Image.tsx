@@ -5,8 +5,8 @@
  * and OS-level preview (Quick Look on macOS, xdg-open on Linux)
  */
 
-import React, { useContext, useEffect, useRef, useState, useCallback } from "react";
-import type { Style, Key } from "../types/index.js";
+import React, { useContext, useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
+import type { Style, Key, ImageHandle } from "../types/index.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 import { FocusContext, InputContext, LayoutContext, ImageOverlayContext, ScrollViewContext } from "../hooks/context.js";
 import type { LayoutRect } from "../types/index.js";
@@ -62,25 +62,26 @@ export interface ImageProps {
   unloadTrigger?: number;
 }
 
-export function Image({
-  src,
-  width,
-  height,
-  unloadTrigger,
-  style,
-  focusedStyle,
-  placeholderStyle,
-  focusable = true,
-  disabled = false,
-  inline = true,
-  placeholder,
-  onStateChange,
-  onError,
-  autoLoad = false,
-  autoSize = false,
-  maxWidth,
-  maxHeight,
-}: ImageProps): React.JSX.Element {
+export const Image = forwardRef<ImageHandle, ImageProps>(
+  function Image({
+    src,
+    width,
+    height,
+    unloadTrigger,
+    style,
+    focusedStyle,
+    placeholderStyle,
+    focusable = true,
+    disabled = false,
+    inline = true,
+    placeholder,
+    onStateChange,
+    onError,
+    autoLoad = false,
+    autoSize = false,
+    maxWidth,
+    maxHeight,
+  }, ref) {
   const focusCtx = useContext(FocusContext);
   const inputCtx = useContext(InputContext);
   const layoutCtx = useContext(LayoutContext);
@@ -103,6 +104,23 @@ export function Image({
 
   // Loaded image data and computed dimensions
   const loadedImageRef = useRef<{ data: Buffer; localPath: string; cellWidth: number; cellHeight: number } | null>(null);
+
+  // Expose imperative handle
+  useImperativeHandle(ref, () => ({
+    focus() {
+      if (focusCtx && focusIdRef.current) {
+        focusCtx.requestFocus(focusIdRef.current);
+      }
+    },
+    blur() {
+      if (focusCtx) {
+        focusCtx.blur();
+      }
+    },
+    get isFocused() {
+      return isFocused;
+    },
+  }), [focusCtx, isFocused]);
 
   const imageName = placeholder || getImageName(src);
   const isRemote = isRemoteUrl(src);
@@ -463,4 +481,5 @@ export function Image({
         )
       : null
   );
-}
+  }
+);

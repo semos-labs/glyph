@@ -24,6 +24,8 @@ export interface UseFocusableResult {
   isFocused: boolean;
   /** Programmatically request focus on this element */
   focus: () => void;
+  /** Programmatically blur (unfocus) this element */
+  blur: () => void;
   /** The focus ID (useful for conditional logic) */
   focusId: string | null;
 }
@@ -143,11 +145,19 @@ export function useFocusable(options: UseFocusableOptions = {}): UseFocusableRes
       focusCtx.requestFocus(focusIdRef.current);
     }
   }, [focusCtx]);
+
+  // Blur function
+  const blur = useCallback(() => {
+    if (focusCtx) {
+      focusCtx.blur();
+    }
+  }, [focusCtx]);
   
   return {
     ref,
     isFocused,
     focus,
+    blur,
     focusId: focusIdRef.current,
   };
 }

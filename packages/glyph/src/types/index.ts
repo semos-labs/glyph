@@ -13,3 +13,15 @@ export type {
   WrapMode,
   TextAlign,
 } from "./style.js";
+
+export type {
+  FocusableHandle,
+  ButtonHandle,
+  InputHandle,
+  SelectHandle,
+  CheckboxHandle,
+  RadioHandle,
+  ListHandle,
+  ImageHandle,
+  TextHandle,
+} from "./handles.js";

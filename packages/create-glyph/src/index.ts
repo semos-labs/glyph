@@ -124,11 +124,12 @@ import {
   Button,
   Checkbox,
   Keybind,
+  JumpNav,
   Progress,
   Spacer,
   useApp,
 } from "@semos-labs/glyph";
-import type { Key, InputHandle } from "@semos-labs/glyph";
+import type { Key, InputHandle, CheckboxHandle } from "@semos-labs/glyph";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -145,6 +146,7 @@ let nextId = 1;
 function App() {
   const { exit } = useApp();
   const inputRef = useRef<InputHandle>(null);
+  const checkboxRefs = useRef(new Map<number, CheckboxHandle>());
 
   const [todos, setTodos] = useState<Todo[]>([
     { id: nextId++, text: "Learn Glyph basics", done: true },
@@ -185,7 +187,17 @@ function App() {
     setTodos((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const handleDeleteFocused = useCallback(() => {
+    for (const [id, handle] of checkboxRefs.current) {
+      if (handle.isFocused) {
+        handleDelete(id);
+        break;
+      }
+    }
+  }, [handleDelete]);
+
   return (
+    <JumpNav>
     <Box
       style={{
         flexDirection: "column",
@@ -195,8 +207,9 @@ function App() {
         gap: 1,
       }}
     >
-      {/* Quit shortcut */}
+      {/* Shortcuts */}
       <Keybind keypress="q" onPress={() => exit()} />
+      <Keybind keypress="ctrl+d" onPress={handleDeleteFocused} />
 
       {/* Header */}
       <Box style={{ flexDirection: "row", alignItems: "center" }}>
@@ -218,14 +231,14 @@ function App() {
           onChange={setNewTodo}
           onKeyPress={handleInputKey}
           placeholder="What needs to be done?"
-          style={{ flexGrow: 1, border: "round", borderColor: "blackBright", paddingX: 1 }}
-          focusedStyle={{ border: "round", borderColor: "cyan", color: "white", paddingX: 1 }}
+          style={{ flexGrow: 1, paddingX: 1, color: "white" }}
+          focusedStyle={{ paddingX: 1, color: "white", bg: "blackBright" }}
         />
         <Button
           label="  add  "
           onPress={handleAdd}
-          style={{ border: "round", borderColor: "blackBright", paddingX: 2 }}
-          focusedStyle={{ border: "round", borderColor: "cyan", bg: "cyan", color: "black", paddingX: 2 }}
+          style={{ color: "blackBright" }}
+          focusedStyle={{ bg: "cyan", color: "black" }}
         />
       </Box>
 
@@ -235,31 +248,28 @@ function App() {
           <Text style={{ dim: true, italic: true }}>No todos yet. Add one above!</Text>
         )}
         {todos.map((todo) => (
-          <Box key={todo.id} style={{ flexDirection: "row", gap: 1, alignItems: "center" }}>
-            <Checkbox
-              checked={todo.done}
-              onChange={() => handleToggle(todo.id)}
-              label={todo.text}
-              style={todo.done ? { dim: true, color: "blackBright" } : { color: "white" }}
-              focusedStyle={{ color: "black", bg: "cyan", bold: true }}
-            />
-            <Spacer />
-            <Button
-              label=" × "
-              onPress={() => handleDelete(todo.id)}
-              style={{ color: "blackBright" }}
-              focusedStyle={{ color: "black", bg: "red", bold: true }}
-            />
-          </Box>
+          <Checkbox
+            key={todo.id}
+            ref={(h) => {
+              if (h) checkboxRefs.current.set(todo.id, h);
+              else checkboxRefs.current.delete(todo.id);
+            }}
+            checked={todo.done}
+            onChange={() => handleToggle(todo.id)}
+            label={todo.text}
+            style={todo.done ? { dim: true, color: "blackBright" } : { color: "white" }}
+            focusedStyle={{ color: "black", bg: "cyan", bold: true }}
+          />
         ))}
       </Box>
 
       {/* Footer */}
       <Spacer />
       <Text style={{ dim: true }}>
-        tab navigate · space toggle · enter add · q quit
+        tab navigate · ctrl+o jump · space toggle · enter add · ctrl+d delete · q quit
       </Text>
     </Box>
+    </JumpNav>
   );
 }
 

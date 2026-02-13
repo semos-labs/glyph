@@ -199,8 +199,7 @@ export const Select = forwardRef<SelectHandle, SelectProps>(
         if (
           key.name === "return" ||
           key.name === " " ||
-          key.sequence === " " ||
-          key.name === "down"
+          key.sequence === " "
         ) {
           setIsOpen(true);
           setSearchText("");

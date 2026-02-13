@@ -576,6 +576,13 @@ export const Input = forwardRef<InputHandle, InputProps>(
         return true;
       }
 
+      // Space key — treat as printable character
+      if (key.name === "space") {
+        const newVal = val.slice(0, pos) + " " + val.slice(pos);
+        updateValue(newVal, pos + 1);
+        return true;
+      }
+
       // Special/function keys we don't handle - pass through
       if (key.name.length > 1) return false;
 

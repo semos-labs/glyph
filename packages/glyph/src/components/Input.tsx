@@ -152,11 +152,18 @@ function lineColToCursor(
 
 // ── Component ─────────────────────────────────────────────────
 
+/** Input type for value validation. */
 export type InputType = "text" | "number";
 
+/**
+ * Props for the {@link Input} component.
+ */
 export interface InputProps {
+  /** Controlled value. Pair with `onChange` to manage state externally. */
   value?: string;
+  /** Initial value for uncontrolled mode (ignored when `value` is provided). */
   defaultValue?: string;
+  /** Callback fired whenever the text value changes. */
   onChange?: (value: string) => void;
   /** Called on every key press. Return `true` to prevent default handling. */
   onKeyPress?: (key: Key) => boolean | void;
@@ -170,13 +177,15 @@ export interface InputProps {
    *   - `undefined` to accept the change as-is
    */
   onBeforeChange?: (newValue: string, oldValue: string) => string | false | void;
+  /** Text shown when the input is empty. */
   placeholder?: string;
+  /** Base style for the input container. */
   style?: Style;
-  /** Style when focused (merged with style) */
+  /** Style when focused (merged with style). */
   focusedStyle?: Style;
   /** Enable multiline editing (Enter inserts newlines, Up/Down navigate lines). */
   multiline?: boolean;
-  /** Automatically focus this input when mounted */
+  /** Automatically focus this input when mounted. */
   autoFocus?: boolean;
   /** 
    * Input type for validation:
@@ -186,6 +195,50 @@ export interface InputProps {
   type?: InputType;
 }
 
+/**
+ * Text input with full keyboard editing, cursor navigation, and optional masking.
+ *
+ * Supports both controlled (`value` + `onChange`) and uncontrolled (`defaultValue`)
+ * modes. Multiline editing is opt-in via the `multiline` prop.
+ *
+ * **Keyboard shortcuts** (when focused):
+ * | Key | Action |
+ * |---|---|
+ * | ← / → | Move cursor |
+ * | Home / End | Start / end of line |
+ * | Ctrl+A / Ctrl+E | Start / end of line |
+ * | Ctrl+W | Delete word backward |
+ * | Ctrl+K | Delete to end of line |
+ * | Alt+← / Alt+→ | Move by word |
+ * | Alt+Backspace | Delete word backward |
+ * | Up / Down | Navigate visual lines (multiline / wrapped) |
+ *
+ * @example
+ * ```tsx
+ * const [name, setName] = useState("");
+ *
+ * <Input
+ *   value={name}
+ *   onChange={setName}
+ *   placeholder="Your name"
+ *   style={{ border: "round", paddingX: 1 }}
+ *   focusedStyle={{ borderColor: "cyan" }}
+ * />
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Masked phone input
+ * import { masks } from "@semos-labs/glyph";
+ *
+ * <Input
+ *   value={phone}
+ *   onChange={setPhone}
+ *   onBeforeChange={masks.usPhone}
+ *   placeholder="(555) 555-5555"
+ * />
+ * ```
+ */
 export const Input = forwardRef<InputHandle, InputProps>(
   function Input(props, ref) {
   const {

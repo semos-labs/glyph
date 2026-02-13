@@ -3,6 +3,9 @@ import type { Style, Key, RadioHandle } from "../types/index.js";
 import { FocusContext, InputContext } from "../hooks/context.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 
+/**
+ * A single option inside a {@link Radio} group.
+ */
 export interface RadioItem<T = string> {
   /** Display label */
   label: string;
@@ -12,6 +15,9 @@ export interface RadioItem<T = string> {
   disabled?: boolean;
 }
 
+/**
+ * Props for the {@link Radio} group component.
+ */
 export interface RadioProps<T = string> {
   /** Radio options */
   items: RadioItem<T>[];
@@ -246,8 +252,25 @@ function RadioInner<T = string>({
 }
 
 /**
- * Radio group component with imperative handle support.
- * Use `ref` to get `{ focus, blur, isFocused, value }`.
+ * Single-select radio group with keyboard navigation.
+ *
+ * Navigate items with ↑/↓ (or j/k), select with Space or Enter.
+ * Supports both horizontal and vertical layout via `direction`.
+ *
+ * @example
+ * ```tsx
+ * const [size, setSize] = useState<string>();
+ *
+ * <Radio
+ *   items={[
+ *     { label: "Small",  value: "sm" },
+ *     { label: "Medium", value: "md" },
+ *     { label: "Large",  value: "lg" },
+ *   ]}
+ *   value={size}
+ *   onChange={setSize}
+ * />
+ * ```
  */
 export const Radio = forwardRef(function Radio<T = string>(
   props: RadioProps<T>,

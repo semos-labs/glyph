@@ -14,12 +14,21 @@ import type { GlyphNode } from "../reconciler/nodes.js";
 import { FocusContext, InputContext, AppContext, ScrollViewContext } from "../hooks/context.js";
 import { useLayout } from "../hooks/useLayout.js";
 
+/**
+ * A single option inside a {@link Select} dropdown.
+ */
 export interface SelectItem {
+  /** Display text shown in the dropdown. */
   label: string;
+  /** Value returned when this item is selected. */
   value: string;
+  /** When `true`, the item is dimmed and cannot be selected. */
   disabled?: boolean;
 }
 
+/**
+ * Props for the {@link Select} component.
+ */
 export interface SelectProps {
   /** List of selectable items */
   items: SelectItem[];
@@ -47,6 +56,37 @@ export interface SelectProps {
   disabled?: boolean;
 }
 
+/**
+ * Dropdown select with keyboard navigation, type-to-filter, and scrolling.
+ *
+ * Opens on **Space** or **Enter**. Close with **Escape** or **Tab**.
+ * Type to filter when open (if `searchable` is enabled).
+ *
+ * Automatically detects whether to open upward or downward based on
+ * available space, unless you override with `openDirection`.
+ *
+ * @example
+ * ```tsx
+ * const [color, setColor] = useState<string>();
+ *
+ * <Select
+ *   items={[
+ *     { label: "Red",   value: "red" },
+ *     { label: "Green", value: "green" },
+ *     { label: "Blue",  value: "blue" },
+ *   ]}
+ *   value={color}
+ *   onChange={setColor}
+ *   placeholder="Pick a color"
+ * />
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Force dropdown to always open upward
+ * <Select items={items} value={v} onChange={setV} openDirection="up" />
+ * ```
+ */
 export const Select = forwardRef<SelectHandle, SelectProps>(
   function Select({
     items,

@@ -2,12 +2,21 @@ import React from "react";
 import type { Style, Color } from "../types/index.js";
 import { List } from "./List.js";
 
+/**
+ * A single item in a {@link Menu}.
+ */
 export interface MenuItem {
+  /** Display text. */
   label: string;
+  /** Value returned when this item is selected. */
   value: string;
+  /** When `true`, the item is dimmed and cannot be selected. */
   disabled?: boolean;
 }
 
+/**
+ * Props for the {@link Menu} component.
+ */
 export interface MenuProps {
   items: MenuItem[];
   /** Controlled selected index */
@@ -26,6 +35,26 @@ export interface MenuProps {
   focusable?: boolean;
 }
 
+/**
+ * Pre-styled menu built on top of {@link List}.
+ *
+ * Renders a vertical list of labeled items with a `>` selection indicator
+ * and highlight color. Navigation uses the same keyboard shortcuts as
+ * `List` (↑/↓, j/k, gg/G, Enter).
+ *
+ * @example
+ * ```tsx
+ * <Menu
+ *   items={[
+ *     { label: "New File",  value: "new" },
+ *     { label: "Open...",   value: "open" },
+ *     { label: "Quit",      value: "quit" },
+ *   ]}
+ *   onSelect={(value) => handleAction(value)}
+ *   highlightColor="magenta"
+ * />
+ * ```
+ */
 export function Menu({
   items,
   selectedIndex,

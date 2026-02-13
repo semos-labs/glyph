@@ -3,6 +3,9 @@ import type { Style, Key, CheckboxHandle } from "../types/index.js";
 import { FocusContext, InputContext } from "../hooks/context.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 
+/**
+ * Props for the {@link Checkbox} component.
+ */
 export interface CheckboxProps {
   /** Whether the checkbox is checked */
   checked: boolean;
@@ -22,6 +25,21 @@ export interface CheckboxProps {
   uncheckedChar?: string;
 }
 
+/**
+ * Toggle checkbox with label. Activated via Space or Enter.
+ *
+ * @example
+ * ```tsx
+ * const [agreed, setAgreed] = useState(false);
+ *
+ * <Checkbox
+ *   checked={agreed}
+ *   onChange={setAgreed}
+ *   label="I agree to the terms"
+ *   focusedStyle={{ bg: "cyan", color: "black" }}
+ * />
+ * ```
+ */
 export const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
   function Checkbox({
     checked,

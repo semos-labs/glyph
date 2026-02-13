@@ -6,12 +6,15 @@
     "dev": "turbo run dev --filter=basic-layout",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
+    "docs": "typedoc",
     "release": "bun scripts/release.ts",
     "release:minor": "bun scripts/release.ts --minor",
     "release:major": "bun scripts/release.ts --major"
   },
   "devDependencies": {
     "turbo": "^2",
+    "typedoc": "^0.28.16",
+    "typedoc-plugin-markdown": "^4.10.0",
     "typescript": "^5.5"
   },
   "packageManager": "pnpm@9.15.4",

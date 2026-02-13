@@ -2,6 +2,9 @@ import { useContext, useEffect, useRef } from "react";
 import { InputContext, FocusContext } from "../hooks/context.js";
 import type { Key } from "../types/index.js";
 
+/**
+ * Props for the {@link Keybind} component.
+ */
 export interface KeybindProps {
   /** Key descriptor, e.g. "q", "escape", "ctrl+c", "ctrl+shift+a" */
   keypress: string;
@@ -49,6 +52,31 @@ function matchesKey(matcher: KeyMatcher, key: Key): boolean {
   return true;
 }
 
+/**
+ * Declarative keyboard shortcut handler (renders nothing).
+ *
+ * Add `<Keybind>` anywhere in your tree to react to specific key
+ * combinations. Supports modifier keys (`ctrl`, `alt`, `shift`, `meta`)
+ * and a `priority` flag to run before focused input handlers.
+ *
+ * @example
+ * ```tsx
+ * // Global quit shortcut
+ * <Keybind keypress="ctrl+q" onPress={() => exit()} />
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Priority keybind that fires even when an Input is focused
+ * <Keybind keypress="ctrl+enter" onPress={submit} priority />
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Only fires when a specific element is focused
+ * <Keybind keypress="delete" onPress={handleDelete} whenFocused={itemFocusId} />
+ * ```
+ */
 export function Keybind({
   keypress,
   onPress,

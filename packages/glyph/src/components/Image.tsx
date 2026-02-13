@@ -1,8 +1,9 @@
 /**
- * Image component for terminal UIs
- * 
- * Supports inline rendering via terminal protocols (Kitty, iTerm2)
- * and OS-level preview (Quick Look on macOS, xdg-open on Linux)
+ * @module Image
+ * Image component for terminal UIs.
+ *
+ * Supports inline rendering via terminal graphics protocols (Kitty, iTerm2)
+ * and OS-level preview (Quick Look on macOS, xdg-open on Linux).
  */
 
 import React, { useContext, useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
@@ -15,8 +16,19 @@ import { getImageDimensions } from "../runtime/imageProtocol.js";
 import { supportsInlineImages } from "../runtime/terminalCapabilities.js";
 import { openImagePreview } from "../runtime/osPreview.js";
 
+/**
+ * Lifecycle state of the {@link Image} component.
+ * - `"placeholder"` — waiting for user to press Space to load
+ * - `"loading"` — image data is being fetched / decoded
+ * - `"loaded"` — rendered inline via Kitty / iTerm2 protocol
+ * - `"error"` — loading failed
+ * - `"preview"` — opened via OS-level preview (Quick Look / xdg-open)
+ */
 export type ImageState = "placeholder" | "loading" | "loaded" | "error" | "preview";
 
+/**
+ * Props for the {@link Image} component.
+ */
 export interface ImageProps {
   /** Image source - local path or remote URL */
   src: string;
@@ -62,6 +74,30 @@ export interface ImageProps {
   unloadTrigger?: number;
 }
 
+/**
+ * Inline image for terminal UIs.
+ *
+ * Displays a placeholder until the user presses Space (or set `autoLoad`).
+ * Supports Kitty and iTerm2 graphics protocols for true inline rendering,
+ * with fallback to OS-level preview. Press Escape to unload.
+ *
+ * @example
+ * ```tsx
+ * <Image src="./logo.png" width={40} height={12} />
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Auto-load with auto-size
+ * <Image
+ *   src="https://example.com/photo.jpg"
+ *   autoLoad
+ *   autoSize
+ *   maxWidth={60}
+ *   maxHeight={20}
+ * />
+ * ```
+ */
 export const Image = forwardRef<ImageHandle, ImageProps>(
   function Image({
     src,

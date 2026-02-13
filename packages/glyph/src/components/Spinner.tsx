@@ -3,6 +3,9 @@ import type { Style } from "../types/index.js";
 
 const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
+/**
+ * Props for the {@link Spinner} component.
+ */
 export interface SpinnerProps {
   /** Animation frames. Defaults to braille dots. */
   frames?: string[];
@@ -14,6 +17,23 @@ export interface SpinnerProps {
   style?: Style;
 }
 
+/**
+ * Animated spinner indicator.
+ *
+ * Uses braille dot characters by default, cycling at 80 ms per frame.
+ * Supply custom `frames` for different animation styles.
+ *
+ * @example
+ * ```tsx
+ * <Spinner label="Loading..." style={{ color: "cyan" }} />
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Custom frames
+ * <Spinner frames={["◐", "◓", "◑", "◒"]} intervalMs={120} />
+ * ```
+ */
 export function Spinner({
   frames = BRAILLE_FRAMES,
   intervalMs = 80,

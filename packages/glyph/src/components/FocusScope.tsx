@@ -2,11 +2,36 @@ import React, { useContext, useEffect, useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { FocusContext } from "../hooks/context.js";
 
+/**
+ * Props for the {@link FocusScope} component.
+ */
 export interface FocusScopeProps {
+  /**
+   * When `true`, Tab/Shift+Tab cycling is confined to the children
+   * of this scope. Previous focus is restored when the scope unmounts.
+   */
   trap?: boolean;
+  /** Children that participate in the trapped focus cycle. */
   children?: ReactNode;
 }
 
+/**
+ * Confines keyboard focus to a sub-tree.
+ *
+ * Wrap a dialog, modal, or drawer with `<FocusScope trap>` to prevent
+ * Tab from escaping. When the scope unmounts, the previously focused
+ * element is restored automatically.
+ *
+ * @example
+ * ```tsx
+ * <FocusScope trap>
+ *   <Box style={{ border: "round", padding: 1 }}>
+ *     <Input placeholder="Name" />
+ *     <Button label="OK" onPress={close} />
+ *   </Box>
+ * </FocusScope>
+ * ```
+ */
 export function FocusScope({ trap = false, children }: FocusScopeProps): React.JSX.Element {
   const focusCtx = useContext(FocusContext);
   const prevFocusRef = useRef<string | null>(null);

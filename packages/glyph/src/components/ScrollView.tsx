@@ -7,7 +7,10 @@ import { useInput } from "../hooks/useInput.js";
 import { FocusContext, LayoutContext, ScrollViewContext } from "../hooks/context.js";
 import type { ScrollViewContextValue, ScrollViewBounds } from "../hooks/context.js";
 
-/** Visible range passed to render function in virtualized mode */
+/**
+ * Visible range passed to the render function in virtualized mode.
+ * Contains the start/end indices and viewport metadata.
+ */
 export interface VisibleRange {
   /** First visible line index (0-based) */
   start: number;
@@ -19,6 +22,9 @@ export interface VisibleRange {
   viewportHeight: number;
 }
 
+/**
+ * Props for the {@link ScrollView} component.
+ */
 export interface ScrollViewProps {
   /** 
    * Children to render. When `virtualize` is true, only visible children are rendered.
@@ -63,6 +69,55 @@ export interface ScrollViewProps {
   estimatedItemHeight?: number;
 }
 
+/**
+ * Scrollable container with optional built-in virtualization.
+ *
+ * Supports three modes:
+ * 1. **Basic** — wraps arbitrary content and scrolls via keyboard.
+ * 2. **Array virtualization** — set `virtualize` to only render visible children.
+ * 3. **Line virtualization** — pass a render function + `totalLines` for giant lists.
+ *
+ * Auto-scrolls to keep the focused child visible when `scrollToFocus` is `true` (default).
+ *
+ * **Keyboard shortcuts** (when the ScrollView or a child has focus):
+ * | Key | Action |
+ * |---|---|
+ * | Page Up / Page Down | Scroll one page |
+ * | Ctrl+D / Ctrl+U | Half-page down / up |
+ * | Ctrl+F / Ctrl+B | Full-page down / up |
+ *
+ * @example
+ * ```tsx
+ * // Basic scrollable content
+ * <ScrollView style={{ height: 10, border: "round" }}>
+ *   {items.map((item) => (
+ *     <Text key={item.id}>{item.name}</Text>
+ *   ))}
+ * </ScrollView>
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Virtualized — only visible children are mounted
+ * <ScrollView virtualize style={{ height: 20 }}>
+ *   {thousandsOfItems.map((item) => (
+ *     <Text key={item.id}>{item.name}</Text>
+ *   ))}
+ * </ScrollView>
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Line-based virtualization with render function
+ * <ScrollView totalLines={100_000} style={{ height: 20 }}>
+ *   {({ start, end }) =>
+ *     Array.from({ length: end - start }, (_, i) => (
+ *       <Text key={start + i}>Line {start + i}</Text>
+ *     ))
+ *   }
+ * </ScrollView>
+ * ```
+ */
 export function ScrollView({
   children,
   style,

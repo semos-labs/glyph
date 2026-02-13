@@ -4,16 +4,45 @@ import type { Style, Key, ButtonHandle } from "../types/index.js";
 import { FocusContext, InputContext } from "../hooks/context.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 
+/**
+ * Props for the {@link Button} component.
+ */
 export interface ButtonProps {
+  /** Callback fired when the button is activated (Enter or Space). */
   onPress?: () => void;
-  /** Shorthand text label (alternative to children) */
+  /** Shorthand text label. When provided and `children` is absent, renders the label as text. */
   label?: string;
+  /** Base style for the button container. */
   style?: Style;
+  /** Style applied when the button is focused (merged with `style`). */
   focusedStyle?: Style;
+  /** Custom content. Takes precedence over `label` when both are provided. */
   children?: ReactNode;
+  /** When `true`, the button is skipped in the focus order and ignores input. */
   disabled?: boolean;
 }
 
+/**
+ * Focusable button that triggers an action on Enter or Space.
+ *
+ * @example
+ * ```tsx
+ * <Button
+ *   label="Save"
+ *   onPress={() => save()}
+ *   style={{ border: "round", paddingX: 2 }}
+ *   focusedStyle={{ bg: "cyan", color: "black" }}
+ * />
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Using children for custom content
+ * <Button onPress={handleClick}>
+ *   <Text style={{ bold: true }}>🚀 Launch</Text>
+ * </Button>
+ * ```
+ */
 export const Button = forwardRef<ButtonHandle, ButtonProps>(
   function Button({ onPress, label, style, focusedStyle, children, disabled }, ref) {
     const focusCtx = useContext(FocusContext);

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["packages/glyph/src/index.ts"],
+  "tsconfig": "packages/glyph/tsconfig.json",
+  "plugin": ["typedoc-plugin-markdown"],
+
+  "out": ".docs-out",
+  "cleanOutputDir": true,
+
+  "name": "@semos-labs/glyph",
+  "readme": "none",
+  "entryFileName": "index",
+  "disableSources": true,
+  "excludeExternals": true,
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeNotDocumented": false,
+  "externalSymbolLinkMappings": {
+    "@semos-labs/glyph": {
+      "GlyphNode": "#",
+      "UseAppResult": "#",
+      "UseFocusResult": "#"
+    }
+  },
+  "groupOrder": [
+    "Components",
+    "Hooks",
+    "Utilities",
+    "Type Aliases",
+    "Interfaces",
+    "Functions",
+    "*"
+  ],
+  "categoryOrder": [
+    "Components",
+    "Hooks",
+    "Utilities",
+    "Types",
+    "*"
+  ],
+  "hidePageHeader": false,
+  "hidePageTitle": false,
+  "hideBreadcrumbs": true,
+  "useCodeBlocks": true,
+  "expandObjects": true,
+  "parametersFormat": "table",
+  "propertiesFormat": "table",
+  "enumMembersFormat": "table",
+  "typeDeclarationFormat": "table",
+  "indexFormat": "table",
+  "outputFileStrategy": "members",
+  "flattenOutputFiles": false,
+  "fileExtension": ".md"
+}

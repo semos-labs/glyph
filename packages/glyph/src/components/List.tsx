@@ -4,12 +4,21 @@ import type { Style, Key, ListHandle } from "../types/index.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 import { FocusContext, InputContext } from "../hooks/context.js";
 
+/**
+ * Information passed to each item's render function.
+ */
 export interface ListItemInfo {
+  /** Zero-based index of this item. */
   index: number;
+  /** Whether this item is currently selected (highlighted). */
   selected: boolean;
+  /** Whether the List component itself has focus. */
   focused: boolean;
 }
 
+/**
+ * Props for the {@link List} component.
+ */
 export interface ListProps {
   /** Total number of items */
   count: number;
@@ -31,6 +40,34 @@ export interface ListProps {
   focusable?: boolean;
 }
 
+/**
+ * Keyboard-navigable list with vim-style bindings.
+ *
+ * Renders `count` items via a `renderItem` function, managing selection
+ * state internally or through controlled props.
+ *
+ * **Keyboard shortcuts** (when focused):
+ * | Key | Action |
+ * |---|---|
+ * | ↑ / k | Move selection up |
+ * | ↓ / j | Move selection down |
+ * | gg | Jump to first item |
+ * | G | Jump to last item |
+ * | Enter | Confirm selection |
+ *
+ * @example
+ * ```tsx
+ * <List
+ *   count={items.length}
+ *   renderItem={({ index, selected, focused }) => (
+ *     <Box style={{ bg: selected && focused ? "cyan" : undefined }}>
+ *       <Text>{items[index].name}</Text>
+ *     </Box>
+ *   )}
+ *   onSelect={(index) => console.log("Selected:", items[index])}
+ * />
+ * ```
+ */
 export const List = forwardRef<ListHandle, ListProps>(
   function List({
     count,

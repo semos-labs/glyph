@@ -32,6 +32,32 @@ import type {
 import { renderImageEscapeSequence } from "./runtime/imageProtocol.js";
 import type { RenderOptions, AppHandle, LayoutRect } from "./types/index.js";
 
+/**
+ * Mount a React element into the terminal and start the render loop.
+ *
+ * This is the entry point for every Glyph application. It sets up the
+ * terminal (raw mode, alternate screen), creates the React reconciler,
+ * and begins painting frames.
+ *
+ * @param element - Root React element to render.
+ * @param opts - Optional configuration (custom streams, debug mode, cursor).
+ * @returns An {@link AppHandle} with `unmount()` and `exit()` methods.
+ *
+ * @example
+ * ```tsx
+ * import { render, Box, Text } from "@semos-labs/glyph";
+ *
+ * function App() {
+ *   return (
+ *     <Box style={{ padding: 1 }}>
+ *       <Text style={{ bold: true, color: "cyan" }}>Hello Glyph!</Text>
+ *     </Box>
+ *   );
+ * }
+ *
+ * render(<App />);
+ * ```
+ */
 export function render(
   element: ReactElement,
   opts: RenderOptions = {},

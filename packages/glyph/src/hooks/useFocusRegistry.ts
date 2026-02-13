@@ -3,6 +3,9 @@ import { FocusContext, LayoutContext } from "./context.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 import type { LayoutRect } from "../types/index.js";
 
+/**
+ * Descriptor for a single focusable element in the registry.
+ */
 export interface FocusableElement {
   /** Unique focus ID */
   id: string;
@@ -14,6 +17,9 @@ export interface FocusableElement {
   type: string;
 }
 
+/**
+ * Return type of {@link useFocusRegistry}.
+ */
 export interface FocusRegistryValue {
   /** All currently registered focusable elements */
   elements: FocusableElement[];
@@ -30,8 +36,21 @@ export interface FocusRegistryValue {
 }
 
 /**
- * Hook to access all registered focusable elements in the current focus context.
- * Useful for building custom navigation UIs like jump-to overlays.
+ * Access all registered focusable elements and navigation helpers.
+ *
+ * Useful for building custom navigation UIs, accessibility overlays,
+ * or debug tools. Respects the current {@link FocusScope} trap.
+ *
+ * @returns Registry value, or `null` outside a Glyph render tree.
+ *
+ * @example
+ * ```tsx
+ * const registry = useFocusRegistry();
+ * if (registry) {
+ *   console.log(`${registry.elements.length} focusable elements`);
+ *   registry.focusNext();
+ * }
+ * ```
  */
 export function useFocusRegistry(): FocusRegistryValue | null {
   const focusCtx = useContext(FocusContext);

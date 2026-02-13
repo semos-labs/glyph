@@ -4,14 +4,52 @@ import type { ReactNode } from "react";
 import type { GlyphNode } from "../reconciler/nodes.js";
 import { FocusContext } from "../hooks/context.js";
 
+/**
+ * Props for the {@link Text} component.
+ */
 export interface TextProps {
+  /** Text style (color, bold, dim, italic, underline, etc.). */
   style?: Style;
+  /**
+   * Text content. Can be a string, number, or nested `<Text>` elements
+   * for rich inline styling (bold words inside a sentence, etc.).
+   */
   children?: ReactNode;
+  /**
+   * Text wrapping mode. Overrides `style.wrap`.
+   * - `"wrap"` — soft-wrap at the container edge (default)
+   * - `"truncate"` — cut off with no indicator
+   * - `"ellipsis"` — cut off with `…`
+   * - `"none"` — no wrapping at all
+   */
   wrap?: Style["wrap"];
+  /** When `true`, the text element participates in the focus (Tab) order. */
   focusable?: boolean;
+  /** Style applied when this element is focused (merged with `style`). */
   focusedStyle?: Style;
 }
 
+/**
+ * Renders styled text in the terminal.
+ *
+ * Supports inline nesting for rich text — wrap portions of text in
+ * additional `<Text>` elements with different styles:
+ *
+ * @example
+ * ```tsx
+ * <Text style={{ color: "white" }}>
+ *   Hello <Text style={{ bold: true, color: "cyan" }}>World</Text>!
+ * </Text>
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Focusable text with highlight
+ * <Text focusable focusedStyle={{ bg: "cyan", color: "black" }}>
+ *   Press Tab to reach me
+ * </Text>
+ * ```
+ */
 export const Text = forwardRef<TextHandle, TextProps>(
   function Text({ children, style, wrap, focusable, focusedStyle }, ref): React.JSX.Element {
     const focusCtx = useContext(FocusContext);

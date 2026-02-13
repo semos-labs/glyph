@@ -20,6 +20,9 @@ interface TrackedElement {
   clipRegion: ClipRect;
 }
 
+/**
+ * Props for the {@link JumpNav} component.
+ */
 export interface JumpNavProps {
   children?: ReactNode;
   /** Keybind to activate jump mode (default: "ctrl+o") */
@@ -118,13 +121,28 @@ function generateHints(count: number, chars: string): string[] {
 }
 
 /**
- * JumpNav provides vim-style quick navigation to focusable elements.
- * Press the activation key (default: Ctrl+O) to show hints next to each
- * focusable element, then press the hint key to jump to that element.
- * 
- * JumpNav is trap-aware: it automatically only shows hints for elements
- * in the current FocusScope trap (e.g., a modal). You only need ONE JumpNav
- * at the root of your app.
+ * Vim-style quick-jump navigation to any focusable element.
+ *
+ * Press the activation key (default **Ctrl+O**) to overlay hint labels
+ * next to every visible focusable element. Then press the hint character(s)
+ * to instantly focus that element.
+ *
+ * Trap-aware — automatically scopes hints to the active {@link FocusScope}
+ * trap (e.g. a modal). Place a single `<JumpNav>` at the root of your app.
+ *
+ * @example
+ * ```tsx
+ * function App() {
+ *   return (
+ *     <JumpNav>
+ *       <Box>
+ *         <Input placeholder="Name" />
+ *         <Button label="Submit" onPress={submit} />
+ *       </Box>
+ *     </JumpNav>
+ *   );
+ * }
+ * ```
  */
 export function JumpNav({
   children,

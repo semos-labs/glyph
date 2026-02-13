@@ -3,6 +3,9 @@ import type { Style, DimensionValue } from "../types/index.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 import { useLayout } from "../hooks/useLayout.js";
 
+/**
+ * Props for the {@link Progress} component.
+ */
 export interface ProgressProps {
   /** Progress value 0..1. Omit when indeterminate. */
   value?: number;
@@ -22,6 +25,21 @@ export interface ProgressProps {
   empty?: string;
 }
 
+/**
+ * Horizontal progress bar with determinate and indeterminate modes.
+ *
+ * @example
+ * ```tsx
+ * // Determinate progress
+ * <Progress value={0.65} showPercent label="Downloading" />
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Indeterminate marquee
+ * <Progress indeterminate label="Loading..." />
+ * ```
+ */
 export function Progress({
   value,
   indeterminate = false,

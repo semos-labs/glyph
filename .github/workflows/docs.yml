@@ -35,6 +35,9 @@ jobs:
       - name: Generate docs with TypeDoc
         run: bunx typedoc --plugin typedoc-plugin-markdown --out .docs-out
 
+      - name: Post-process for Starlight
+        run: bun scripts/postprocess-docs.ts .docs-out
+
       - name: Package docs
         run: tar -czf docs.tar.gz -C .docs-out .
 

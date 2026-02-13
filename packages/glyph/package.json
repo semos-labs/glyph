@@ -1,6 +1,6 @@
 {
   "name": "@semos-labs/glyph",
-  "version": "0.1.78",
+  "version": "0.1.79",
   "description": "A React renderer for terminal UIs with flexbox layout",
   "type": "module",
   "main": "./dist/index.js",

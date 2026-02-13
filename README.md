@@ -50,22 +50,48 @@ Build real terminal applications with React. Glyph provides a full component mod
 
 ---
 
-## Installation
+## Quick Start
+
+The fastest way to get started — scaffold a new project:
 
 ```bash
+# bun
+bun create @semos-labs/glyph my-app
+
+# npm
+npm create @semos-labs/glyph my-app
+
+# pnpm
+pnpm create @semos-labs/glyph my-app
+
+# yarn
+yarn create @semos-labs/glyph my-app
+```
+
+Then:
+
+```bash
+cd my-app
+bun install
+bun dev
+```
+
+### Manual Installation
+
+```bash
+# bun
+bun add @semos-labs/glyph react
+
 # npm
 npm install @semos-labs/glyph react
 
 # pnpm
 pnpm add @semos-labs/glyph react
-
-# bun
-bun add @semos-labs/glyph react
 ```
 
 ---
 
-## Quick Start
+## Hello World
 
 ```tsx
 import React from "react";

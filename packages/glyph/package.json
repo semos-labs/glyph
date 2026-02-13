@@ -60,10 +60,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nick-skriabin/glyph.git"
+    "url": "git+https://github.com/semos-labs/glyph.git"
   },
   "bugs": {
-    "url": "https://github.com/nick-skriabin/glyph/issues"
+    "url": "https://github.com/semos-labs/glyph/issues"
   },
-  "homepage": "https://github.com/nick-skriabin/glyph#readme"
+  "homepage": "https://github.com/semos-labs/glyph#readme"
 }

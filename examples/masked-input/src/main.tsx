@@ -9,7 +9,7 @@ import {
   createMask,
   masks,
   ScrollView,
-} from "@nick-skriabin/glyph";
+} from "@semos-labs/glyph";
 
 // Custom masks
 const licensePlate = createMask("aaa-9999");

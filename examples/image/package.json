@@ -6,7 +6,7 @@
     "scrollview": "bun run src/scrollview-test.tsx"
   },
   "dependencies": {
-    "@nick-skriabin/glyph": "workspace:*",
+    "@semos-labs/glyph": "workspace:*",
     "react": "^19.1.0"
   },
   "devDependencies": {

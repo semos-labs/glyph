@@ -13,7 +13,7 @@
       "name": "ansi-text",
       "version": "1.0.0",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.1.0",
       },
       "devDependencies": {
@@ -23,7 +23,7 @@
     "examples/basic-layout": {
       "name": "basic-layout",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
       "devDependencies": {
@@ -36,7 +36,7 @@
     "examples/dashboard": {
       "name": "dashboard",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
       "devDependencies": {
@@ -49,7 +49,7 @@
     "examples/dialog-demo": {
       "name": "dialog-demo",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
       "devDependencies": {
@@ -62,7 +62,7 @@
     "examples/forms-demo": {
       "name": "forms-demo",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
       "devDependencies": {
@@ -75,7 +75,7 @@
     "examples/image": {
       "name": "image-example",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.1.0",
       },
       "devDependencies": {
@@ -86,7 +86,7 @@
     "examples/jump-nav": {
       "name": "jump-nav-demo",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.1.0",
       },
       "devDependencies": {
@@ -97,7 +97,7 @@
     "examples/key-test": {
       "name": "key-test",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
       "devDependencies": {
@@ -108,7 +108,7 @@
     "examples/list-demo": {
       "name": "list-demo",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
       "devDependencies": {
@@ -121,7 +121,7 @@
     "examples/masked-input": {
       "name": "masked-input",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
       "devDependencies": {
@@ -134,7 +134,7 @@
     "examples/menu-demo": {
       "name": "menu-demo",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
       "devDependencies": {
@@ -147,7 +147,7 @@
     "examples/modal-input": {
       "name": "modal-input",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
       "devDependencies": {
@@ -160,7 +160,7 @@
     "examples/scrollview-demo": {
       "name": "scrollview-demo",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
       "devDependencies": {
@@ -173,7 +173,7 @@
     "examples/select-demo": {
       "name": "select-demo",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
       "devDependencies": {
@@ -186,7 +186,7 @@
     "examples/showcase": {
       "name": "showcase",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
       "devDependencies": {
@@ -199,20 +199,20 @@
     "examples/styled-text": {
       "name": "styled-text-example",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
     },
     "examples/virtualized-list": {
       "name": "virtualized-list-example",
       "dependencies": {
-        "@nick-skriabin/glyph": "workspace:*",
+        "@semos-labs/glyph": "workspace:*",
         "react": "^19.0.0",
       },
     },
     "packages/create-glyph": {
-      "name": "@semos/create-glyph",
-      "version": "0.1.72",
+      "name": "@semos-labs/create-glyph",
+      "version": "0.1.73",
       "bin": {
         "create-glyph": "./dist/index.js",
       },
@@ -223,8 +223,8 @@
       },
     },
     "packages/glyph": {
-      "name": "@nick-skriabin/glyph",
-      "version": "0.1.72",
+      "name": "@semos-labs/glyph",
+      "version": "0.1.73",
       "dependencies": {
         "react-reconciler": "^0.31.0",
         "string-width": "^7.2.0",
@@ -304,8 +304,6 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "3.1.2", "@jridgewell/sourcemap-codec": "1.5.5" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
-    "@nick-skriabin/glyph": ["@nick-skriabin/glyph@workspace:packages/glyph"],
-
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.57.1", "", { "os": "android", "cpu": "arm" }, "sha512-A6ehUVSiSaaliTxai040ZpZ2zTevHYbvu/lDoeAteHI8QnaosIzm4qwtezfRg1jOYaUmnzLX1AOD6Z+UJjtifg=="],
 
     "@rollup/rollup-android-arm64": ["@rollup/rollup-android-arm64@4.57.1", "", { "os": "android", "cpu": "arm64" }, "sha512-dQaAddCY9YgkFHZcFNS/606Exo8vcLHwArFZ7vxXq4rigo2bb494/xKMMwRRQW6ug7Js6yXmBZhSBRuBvCCQ3w=="],
@@ -356,7 +354,9 @@
 
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.57.1", "", { "os": "win32", "cpu": "x64" }, "sha512-mxRFDdHIWRxg3UfIIAwCm6NzvxG0jDX/wBN6KsQFTvKFqqg9vTrWUE68qEjHt19A5wwx5X5aUi2zuZT7YR0jrA=="],
 
-    "@semos/create-glyph": ["@semos/create-glyph@workspace:packages/create-glyph"],
+    "@semos-labs/create-glyph": ["@semos-labs/create-glyph@workspace:packages/create-glyph"],
+
+    "@semos-labs/glyph": ["@semos-labs/glyph@workspace:packages/glyph"],
 
     "@types/estree": ["@types/estree@1.0.8", "", {}, "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="],
 

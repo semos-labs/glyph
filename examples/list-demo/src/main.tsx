@@ -6,7 +6,7 @@ import {
   List,
   Keybind,
   useApp,
-} from "@nick-skriabin/glyph";
+} from "@semos-labs/glyph";
 
 const FRUITS = [
   "Apple", "Banana", "Cherry", "Dragonfruit", "Elderberry",

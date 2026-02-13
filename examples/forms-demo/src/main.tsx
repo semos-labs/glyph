@@ -9,7 +9,7 @@ import {
   Input,
   Keybind,
   useApp,
-} from "@nick-skriabin/glyph";
+} from "@semos-labs/glyph";
 
 type Theme = "light" | "dark" | "system";
 type NotifyFreq = "all" | "important" | "none";

@@ -10,7 +10,7 @@ import {
   Keybind,
   Spacer,
   useApp,
-} from "@nick-skriabin/glyph";
+} from "@semos-labs/glyph";
 
 const VARIANTS = ["info", "success", "warning", "error"] as const;
 

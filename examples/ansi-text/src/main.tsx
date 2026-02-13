@@ -1,5 +1,5 @@
 import React from "react";
-import { render, Box, Text, Keybind, useApp, ScrollView } from "@nick-skriabin/glyph";
+import { render, Box, Text, Keybind, useApp, ScrollView } from "@semos-labs/glyph";
 
 // ANSI escape codes for styling
 const ESC = "\x1b";

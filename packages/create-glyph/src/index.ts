@@ -69,7 +69,7 @@ function templatePackageJson(name: string): string {
         build: "tsup src/main.tsx --format esm --target node18",
       },
       dependencies: {
-        "@semos/glyph": "latest",
+        "@semos-labs/glyph": "latest",
         react: "^19.0.0",
       },
       devDependencies: {
@@ -126,7 +126,7 @@ import {
   Progress,
   Spacer,
   useApp,
-} from "@semos/glyph";
+} from "@semos-labs/glyph";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -268,10 +268,10 @@ function printUsage() {
   console.log(`  ${bold("create-glyph")} ${dim("— scaffold a new Glyph terminal UI app")}`);
   console.log();
   console.log(`  ${bold("Usage:")}`);
-  console.log(`    ${cyan("bun create @semos/glyph")} ${dim("<project-name>")}`);
-  console.log(`    ${cyan("npm create @semos/glyph")} ${dim("<project-name>")}`);
-  console.log(`    ${cyan("pnpm create @semos/glyph")} ${dim("<project-name>")}`);
-  console.log(`    ${cyan("yarn create @semos/glyph")} ${dim("<project-name>")}`);
+  console.log(`    ${cyan("bun create @semos-labs/glyph")} ${dim("<project-name>")}`);
+  console.log(`    ${cyan("npm create @semos-labs/glyph")} ${dim("<project-name>")}`);
+  console.log(`    ${cyan("pnpm create @semos-labs/glyph")} ${dim("<project-name>")}`);
+  console.log(`    ${cyan("yarn create @semos-labs/glyph")} ${dim("<project-name>")}`);
   console.log();
   console.log(`  ${bold("Options:")}`);
   console.log(`    ${cyan("-h, --help")}     Show this help message`);

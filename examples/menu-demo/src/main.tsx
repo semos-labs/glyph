@@ -6,7 +6,7 @@ import {
   Menu,
   Keybind,
   useApp,
-} from "@nick-skriabin/glyph";
+} from "@semos-labs/glyph";
 
 function App() {
   const { exit } = useApp();

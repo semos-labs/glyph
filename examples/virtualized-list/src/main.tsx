@@ -6,7 +6,7 @@ import {
   ScrollView,
   Keybind,
   useApp,
-} from "@nick-skriabin/glyph";
+} from "@semos-labs/glyph";
 
 // Generate items with varying heights
 const items = Array.from({ length: 1000 }, (_, i) => {

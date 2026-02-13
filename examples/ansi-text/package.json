@@ -6,7 +6,7 @@
     "dev": "bun run src/main.tsx"
   },
   "dependencies": {
-    "@nick-skriabin/glyph": "workspace:*",
+    "@semos-labs/glyph": "workspace:*",
     "react": "^19.1.0"
   },
   "devDependencies": {

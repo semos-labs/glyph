@@ -17,7 +17,7 @@ import {
   ToastHost,
   useToast,
   useApp,
-} from "@nick-skriabin/glyph";
+} from "@semos-labs/glyph";
 
 // ── Types ──────────────────────────────────────────────────────
 

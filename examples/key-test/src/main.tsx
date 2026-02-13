@@ -7,7 +7,7 @@ import {
   Keybind,
   useInput,
   useApp,
-} from "@nick-skriabin/glyph";
+} from "@semos-labs/glyph";
 
 function App() {
   const { exit } = useApp();

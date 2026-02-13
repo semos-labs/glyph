@@ -12,7 +12,7 @@ import {
   DialogHost,
   Portal,
   FocusScope,
-} from "@nick-skriabin/glyph";
+} from "@semos-labs/glyph";
 
 // Settings modal component - NO JumpNav needed inside!
 function SettingsModal({

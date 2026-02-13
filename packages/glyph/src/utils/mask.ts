@@ -9,7 +9,7 @@
  * 
  * @example
  * ```tsx
- * import { createMask } from "@nick-skriabin/glyph";
+ * import { createMask } from "@semos-labs/glyph";
  * 
  * // Phone: (123) 456-7890
  * const phoneMask = createMask("(999) 999-9999");

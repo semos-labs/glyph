@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@nick-skriabin/glyph"><img src="https://img.shields.io/npm/v/@nick-skriabin/glyph?color=crimson&logo=npm" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@semos-labs/glyph"><img src="https://img.shields.io/npm/v/@semos-labs/glyph?color=crimson&logo=npm" alt="npm version"></a>
   <a href="https://github.com/nick-skriabin/glyph/actions/workflows/test.yml"><img src="https://github.com/nick-skriabin/glyph/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
   <img src="https://img.shields.io/badge/React-18%2B-61dafb?logo=react&logoColor=white" alt="React 18+">
   <img src="https://img.shields.io/badge/Yoga-Flexbox-mediumpurple?logo=meta&logoColor=white" alt="Yoga Flexbox">
@@ -54,13 +54,13 @@ Build real terminal applications with React. Glyph provides a full component mod
 
 ```bash
 # npm
-npm install @nick-skriabin/glyph react
+npm install @semos-labs/glyph react
 
 # pnpm
-pnpm add @nick-skriabin/glyph react
+pnpm add @semos-labs/glyph react
 
 # bun
-bun add @nick-skriabin/glyph react
+bun add @semos-labs/glyph react
 ```
 
 ---
@@ -69,7 +69,7 @@ bun add @nick-skriabin/glyph react
 
 ```tsx
 import React from "react";
-import { render, Box, Text, Keybind, useApp } from "@nick-skriabin/glyph";
+import { render, Box, Text, Keybind, useApp } from "@semos-labs/glyph";
 
 function App() {
   const { exit } = useApp();
@@ -141,7 +141,7 @@ Supports: basic colors (30-37, 40-47), bright colors (90-97, 100-107), 256-color
 **Utility functions** for working with ANSI strings:
 
 ```tsx
-import { parseAnsi, stripAnsi } from "@nick-skriabin/glyph";
+import { parseAnsi, stripAnsi } from "@semos-labs/glyph";
 
 // Parse ANSI into styled segments
 const segments = parseAnsi("\x1b[31mRed\x1b[0m Normal");
@@ -180,7 +180,7 @@ Supports `multiline` for multi-line editing, `autoFocus` for automatic focus on 
 **Input masking** with `onBeforeChange` for validation/formatting:
 
 ```tsx
-import { createMask, masks } from "@nick-skriabin/glyph";
+import { createMask, masks } from "@semos-labs/glyph";
 
 // Pre-built masks
 <Input onBeforeChange={masks.usPhone} placeholder="(___) ___-____" />
@@ -646,7 +646,7 @@ const { focused, focus } = useFocus(ref);
 Make any element focusable with full keyboard support. Perfect for building custom interactive components.
 
 ```tsx
-import { useFocusable, Box, Text } from "@nick-skriabin/glyph";
+import { useFocusable, Box, Text } from "@semos-labs/glyph";
 
 function CustomPicker({ items, onSelect }) {
   const [selected, setSelected] = useState(0);

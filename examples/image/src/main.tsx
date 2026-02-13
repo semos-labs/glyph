@@ -8,7 +8,7 @@ import {
   useApp,
   detectTerminalCapabilities,
   supportsInlineImages,
-} from "@nick-skriabin/glyph";
+} from "@semos-labs/glyph";
 
 // Debug: print terminal detection info
 const caps = detectTerminalCapabilities(true);

@@ -10,7 +10,7 @@ import {
   Portal,
   Button,
   useApp,
-} from "@nick-skriabin/glyph";
+} from "@semos-labs/glyph";
 
 function Modal({
   onClose,

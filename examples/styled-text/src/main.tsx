@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { render, Box, Text, Keybind, useApp, ScrollView } from "@nick-skriabin/glyph";
+import { render, Box, Text, Keybind, useApp, ScrollView } from "@semos-labs/glyph";
 
 /**
  * Demonstrates nested Text component composability.

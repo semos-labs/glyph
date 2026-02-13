@@ -211,23 +211,21 @@ function App() {
       <Progress value={progress} />
 
       {/* Add todo */}
-      <Box style={{ flexDirection: "row", gap: 1 }}>
-        <Box style={{ flexGrow: 1 }}>
-          <Input
-            ref={inputRef}
-            value={newTodo}
-            onChange={setNewTodo}
-            onKeyPress={handleInputKey}
-            placeholder="What needs to be done?"
-            style={{ border: "round", borderColor: "blackBright", paddingX: 1 }}
-            focusedStyle={{ border: "round", borderColor: "cyan", color: "white", paddingX: 1 }}
-          />
-        </Box>
+      <Box style={{ flexDirection: "row", gap: 1, alignItems: "stretch" }}>
+        <Input
+          ref={inputRef}
+          value={newTodo}
+          onChange={setNewTodo}
+          onKeyPress={handleInputKey}
+          placeholder="What needs to be done?"
+          style={{ flexGrow: 1, border: "round", borderColor: "blackBright", paddingX: 1 }}
+          focusedStyle={{ border: "round", borderColor: "cyan", color: "white", paddingX: 1 }}
+        />
         <Button
-          label=" add "
+          label="  add  "
           onPress={handleAdd}
-          style={{ border: "round", borderColor: "blackBright", paddingX: 1 }}
-          focusedStyle={{ border: "round", borderColor: "cyan", bg: "cyan", color: "black", paddingX: 1 }}
+          style={{ border: "round", borderColor: "blackBright", paddingX: 2 }}
+          focusedStyle={{ border: "round", borderColor: "cyan", bg: "cyan", color: "black", paddingX: 2 }}
         />
       </Box>
 
@@ -243,14 +241,14 @@ function App() {
               onChange={() => handleToggle(todo.id)}
               label={todo.text}
               style={todo.done ? { dim: true, color: "blackBright" } : { color: "white" }}
-              focusedStyle={{ color: "cyanBright" }}
+              focusedStyle={{ color: "black", bg: "cyan", bold: true }}
             />
             <Spacer />
             <Button
               label=" × "
               onPress={() => handleDelete(todo.id)}
               style={{ color: "blackBright" }}
-              focusedStyle={{ color: "redBright" }}
+              focusedStyle={{ color: "black", bg: "red", bold: true }}
             />
           </Box>
         ))}
@@ -378,12 +376,9 @@ function main() {
   }
 
   console.log();
-  console.log(`  ${green("✓")} ${bold(dirName)} is ready!`);
+  console.log(`  ${green("✓")} ${bold(dirName)} is ready! Run this to get started:`);
   console.log();
-  console.log(`  ${bold("Get started:")}`);
-  console.log();
-  console.log(`    ${cyan("cd")} ${dirName}`);
-  console.log(`    ${cyan(getRunCommand(pm))}`);
+  console.log(`    ${bold(cyan(`cd ${dirName} && ${getRunCommand(pm)}`))}`);
   console.log();
   console.log(`  ${dim("Happy hacking! ✦")}`);
   console.log();

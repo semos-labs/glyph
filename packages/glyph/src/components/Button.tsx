@@ -6,6 +6,8 @@ import type { GlyphNode } from "../reconciler/nodes.js";
 
 export interface ButtonProps {
   onPress?: () => void;
+  /** Shorthand text label (alternative to children) */
+  label?: string;
   style?: Style;
   focusedStyle?: Style;
   children?: ReactNode;
@@ -13,7 +15,7 @@ export interface ButtonProps {
 }
 
 export const Button = forwardRef<ButtonHandle, ButtonProps>(
-  function Button({ onPress, style, focusedStyle, children, disabled }, ref) {
+  function Button({ onPress, label, style, focusedStyle, children, disabled }, ref) {
     const focusCtx = useContext(FocusContext);
     const inputCtx = useContext(InputContext);
     const nodeRef = useRef<GlyphNode | null>(null);
@@ -81,6 +83,10 @@ export const Button = forwardRef<ButtonHandle, ButtonProps>(
       ...(isFocused && focusedStyle ? focusedStyle : {}),
     };
 
+    const content = children ?? (label != null
+      ? React.createElement("text" as any, { key: "label" }, label)
+      : null);
+
     return React.createElement(
       "box" as any,
       {
@@ -98,7 +104,7 @@ export const Button = forwardRef<ButtonHandle, ButtonProps>(
           }
         },
       },
-      children,
+      content,
     );
   }
 );

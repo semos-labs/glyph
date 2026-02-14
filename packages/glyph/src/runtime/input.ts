@@ -165,10 +165,13 @@ export function parseKeySequence(data: string): Key[] {
       // Alt + char: ESC followed by a printable char
       if (i + 1 < data.length && data.charCodeAt(i + 1) >= 32) {
         const nextChar = data[i + 1]!;
+        const nextCode = data.charCodeAt(i + 1);
+        const isUpper = nextCode >= 65 && nextCode <= 90;
         keys.push({
           name: nextChar === " " ? "space" : nextChar.toLowerCase(),
           sequence: data.substring(i, i + 2),
           alt: true,
+          ...(isUpper && { shift: true }),
         });
         i += 2;
         continue;
@@ -204,7 +207,13 @@ export function parseKeySequence(data: string): Key[] {
     }
 
     // Printable characters (space gets special name)
-    keys.push({ name: ch === " " ? "space" : ch, sequence: ch });
+    // Uppercase letters (A-Z) → shifted lowercase in legacy terminal mode
+    // (Kitty/xterm protocols already handle this via CSI u sequences)
+    if (code >= 65 && code <= 90) {
+      keys.push({ name: ch.toLowerCase(), sequence: ch, shift: true });
+    } else {
+      keys.push({ name: ch === " " ? "space" : ch, sequence: ch });
+    }
     i++;
   }
 

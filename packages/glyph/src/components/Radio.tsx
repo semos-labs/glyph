@@ -139,22 +139,22 @@ function RadioInner<T = string>({
     const handler = (key: Key): boolean => {
       if (focusCtx?.focusedId !== fid) return false;
 
-      // Previous: up, left, k, shift+tab
+      // Previous: up, left, k (plain), shift+tab
       if (
         key.name === "up" ||
         key.name === "left" ||
-        key.name === "k" ||
+        (key.name === "k" && !key.shift && !key.ctrl && !key.alt) ||
         (key.name === "tab" && key.shift)
       ) {
         setHighlightedIndex((idx) => findNextEnabled(idx, -1));
         return true;
       }
 
-      // Next: down, right, j, tab
+      // Next: down, right, j (plain), tab
       if (
         key.name === "down" ||
         key.name === "right" ||
-        key.name === "j" ||
+        (key.name === "j" && !key.shift && !key.ctrl && !key.alt) ||
         (key.name === "tab" && !key.shift)
       ) {
         setHighlightedIndex((idx) => findNextEnabled(idx, 1));

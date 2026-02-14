@@ -87,4 +87,66 @@ describe("parseKeySequence", () => {
     const keys = parseKeySequence("\x1b[3~");
     expect(keys[0]?.name).toBe("delete");
   });
+
+  test("parses uppercase letter as shift+lowercase", () => {
+    const keys = parseKeySequence("A");
+    expect(keys.length).toBe(1);
+    expect(keys[0]?.name).toBe("a");
+    expect(keys[0]?.shift).toBe(true);
+    expect(keys[0]?.sequence).toBe("A");
+  });
+
+  test("parses lowercase letter without shift", () => {
+    const keys = parseKeySequence("a");
+    expect(keys.length).toBe(1);
+    expect(keys[0]?.name).toBe("a");
+    expect(keys[0]?.shift).toBeUndefined();
+  });
+
+  test("parses multiple uppercase letters", () => {
+    const keys = parseKeySequence("ABC");
+    expect(keys.length).toBe(3);
+    expect(keys[0]?.name).toBe("a");
+    expect(keys[0]?.shift).toBe(true);
+    expect(keys[1]?.name).toBe("b");
+    expect(keys[1]?.shift).toBe(true);
+    expect(keys[2]?.name).toBe("c");
+    expect(keys[2]?.shift).toBe(true);
+  });
+
+  test("parses alt+uppercase as alt+shift+lowercase", () => {
+    const keys = parseKeySequence("\x1bA");
+    expect(keys.length).toBe(1);
+    expect(keys[0]?.name).toBe("a");
+    expect(keys[0]?.alt).toBe(true);
+    expect(keys[0]?.shift).toBe(true);
+  });
+
+  test("parses alt+lowercase without shift", () => {
+    const keys = parseKeySequence("\x1ba");
+    expect(keys.length).toBe(1);
+    expect(keys[0]?.name).toBe("a");
+    expect(keys[0]?.alt).toBe(true);
+    expect(keys[0]?.shift).toBeUndefined();
+  });
+
+  test("shift+arrow via CSI modifier", () => {
+    // ESC[1;2A = Shift+Up
+    const keys = parseKeySequence("\x1b[1;2A");
+    expect(keys[0]?.name).toBe("up");
+    expect(keys[0]?.shift).toBe(true);
+  });
+
+  test("kitty protocol shift+a via CSI u", () => {
+    // ESC[97;2u = Shift+a (Kitty protocol)
+    const keys = parseKeySequence("\x1b[97;2u");
+    expect(keys[0]?.name).toBe("a");
+    expect(keys[0]?.shift).toBe(true);
+  });
+
+  test("symbols are not marked as shifted", () => {
+    const keys = parseKeySequence("!");
+    expect(keys[0]?.name).toBe("!");
+    expect(keys[0]?.shift).toBeUndefined();
+  });
 });

@@ -188,8 +188,15 @@ export const List = forwardRef<ListHandle, ListProps>(
     const handler = (key: Key): boolean => {
       if (focusCtx?.focusedId !== fid) return false;
 
+      // G (Shift+g) - go to bottom (check before gg so shift+g isn't swallowed)
+      if (key.name === "g" && key.shift && !key.ctrl && !key.alt) {
+        lastKeyRef.current = null;
+        setIndex(findFirstEnabled(true));
+        return true;
+      }
+
       // gg - go to top (requires two consecutive 'g' presses)
-      if (key.name === "g" && !key.ctrl && !key.alt) {
+      if (key.name === "g" && !key.ctrl && !key.alt && !key.shift) {
         if (lastKeyRef.current === "g") {
           setIndex(findFirstEnabled(false));
           lastKeyRef.current = null;
@@ -199,24 +206,17 @@ export const List = forwardRef<ListHandle, ListProps>(
         return true;
       }
 
-      // G - go to bottom
-      if (key.name === "G" || (key.name === "g" && key.shift)) {
-        lastKeyRef.current = null;
-        setIndex(findFirstEnabled(true));
-        return true;
-      }
-
       // Clear lastKey for any other key
       lastKeyRef.current = null;
 
-      // Up / k - move up
-      if (key.name === "up" || key.name === "k") {
+      // Up / k - move up (plain k only, let shift+k fall through to keybinds)
+      if (key.name === "up" || (key.name === "k" && !key.shift && !key.ctrl && !key.alt)) {
         setIndex(findNextEnabled(selectedIndex, -1));
         return true;
       }
 
-      // Down / j - move down
-      if (key.name === "down" || key.name === "j") {
+      // Down / j - move down (plain j only, let shift+j fall through to keybinds)
+      if (key.name === "down" || (key.name === "j" && !key.shift && !key.ctrl && !key.alt)) {
         setIndex(findNextEnabled(selectedIndex, 1));
         return true;
       }

@@ -904,6 +904,13 @@ bun run --filter jump-nav dev
       <br>
       <sub>Calendar & time management TUI</sub>
     </td>
+    <td align="center">
+      <a href="https://github.com/semos-labs/epist">
+        <strong>Epist</strong>
+      </a>
+      <br>
+      <sub>Gmail client for your terminal</sub>
+    </td>
   </tr>
 </table>
 

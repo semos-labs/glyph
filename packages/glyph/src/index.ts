@@ -42,6 +42,8 @@ export { JumpNav } from "./components/JumpNav.js";
 export type { JumpNavProps } from "./components/JumpNav.js";
 export { Image } from "./components/Image.js";
 export type { ImageProps, ImageState } from "./components/Image.js";
+export { Match } from "./components/Match.js";
+export type { MatchProps } from "./components/Match.js";
 
 // Hooks
 export { useInput } from "./hooks/useInput.js";
@@ -53,6 +55,7 @@ export { useApp } from "./hooks/useApp.js";
 export { useFocusRegistry } from "./hooks/useFocusRegistry.js";
 export type { FocusableElement, FocusRegistryValue } from "./hooks/useFocusRegistry.js";
 export { useScrollIntoView } from "./hooks/useScrollIntoView.js";
+export { useMediaQuery } from "./hooks/useMediaQuery.js";
 
 // Utilities
 export { createMask, masks } from "./utils/mask.js";
@@ -61,10 +64,15 @@ export { parseAnsi, stripAnsi } from "./paint/ansi.js";
 export type { AnsiStyle, StyledSegment } from "./paint/ansi.js";
 export { detectTerminalCapabilities, supportsInlineImages } from "./runtime/terminalCapabilities.js";
 export type { TerminalCapabilities } from "./runtime/terminalCapabilities.js";
+export { defaultBreakpoints, resolveResponsiveValue, resolveStyle } from "./layout/responsive.js";
 
 // Types
 export type {
   Style,
+  ResolvedStyle,
+  Responsive,
+  Breakpoint,
+  MediaQueryInput,
   LayoutRect,
   Key,
   RenderOptions,

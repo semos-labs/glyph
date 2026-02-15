@@ -1,5 +1,9 @@
 export type {
   Style,
+  ResolvedStyle,
+  Responsive,
+  Breakpoint,
+  MediaQueryInput,
   LayoutRect,
   Key,
   RenderOptions,

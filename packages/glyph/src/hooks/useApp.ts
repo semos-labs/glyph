@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { useContext, useCallback, useSyncExternalStore } from "react";
 import { AppContext } from "./context.js";
 
 /**
@@ -7,6 +7,8 @@ import { AppContext } from "./context.js";
 export interface UseAppResult {
   /** Terminate the application, optionally with an exit code. */
   exit(code?: number): void;
+  /** Force a full redraw of the entire screen (clear + repaint). */
+  forceRedraw(): void;
   /** Current terminal width in columns. Updates on resize. */
   columns: number;
   /** Current terminal height in rows. Updates on resize. */
@@ -19,6 +21,12 @@ export interface UseAppResult {
  * Must be called inside a Glyph render tree (i.e. inside a component
  * passed to {@link render}).
  *
+ * The returned `columns` and `rows` are reactive — components that
+ * destructure them will automatically re-render when the terminal is
+ * resized.  This is implemented via `useSyncExternalStore` under the
+ * hood, subscribing to the same resize event that drives
+ * {@link useMediaQuery}.
+ *
  * @example
  * ```tsx
  * const { exit, columns, rows } = useApp();
@@ -26,7 +34,7 @@ export interface UseAppResult {
  * <Text>Terminal size: {columns}×{rows}</Text>
  * <Button label="Quit" onPress={() => exit()} />
  * ```
-  * @category Hooks
+ * @category Hooks
  */
 export function useApp(): UseAppResult {
   const ctx = useContext(AppContext);
@@ -34,13 +42,23 @@ export function useApp(): UseAppResult {
     throw new Error("useApp must be used within a Glyph render tree");
   }
 
+  // Subscribe to resize events so that `columns` / `rows` trigger a
+  // React re-render when the terminal dimensions change.
+  const subscribe = useCallback(
+    (cb: () => void) => ctx.onResize(cb),
+    [ctx],
+  );
+
+  const getColumns = useCallback(() => ctx.columns, [ctx]);
+  const getRows = useCallback(() => ctx.rows, [ctx]);
+
+  const columns = useSyncExternalStore(subscribe, getColumns);
+  const rows = useSyncExternalStore(subscribe, getRows);
+
   return {
     exit: ctx.exit,
-    get columns() {
-      return ctx.columns;
-    },
-    get rows() {
-      return ctx.rows;
-    },
+    forceRedraw: ctx.forceRedraw,
+    columns,
+    rows,
   };
 }

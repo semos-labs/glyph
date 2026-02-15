@@ -335,11 +335,19 @@ export function render(
       },
     };
 
+    // ---- Resize subscription ----
+    const resizeHandlers = new Set<() => void>();
+
     // ---- App context ----
     const appContextValue: AppContextValue = {
       registerNode() { },
       unregisterNode() { },
       scheduleRender,
+      forceRedraw() {
+        fullRedraw = true;
+        renderedImages.clear();
+        performRender();
+      },
       exit(code?: number) {
         handle.exit(code);
       },
@@ -348,6 +356,10 @@ export function render(
       },
       get rows() {
         return terminal.rows;
+      },
+      onResize(handler: () => void) {
+        resizeHandlers.add(handler);
+        return () => { resizeHandlers.delete(handler); };
       },
     };
 
@@ -382,7 +394,7 @@ export function render(
         fullRedraw = true;
       }
 
-      // Compute layout
+      // Compute layout (includes responsive style resolution)
       computeLayout(container.children, cols, rows);
 
       // Notify layout subscribers
@@ -408,6 +420,7 @@ export function render(
 
       // Diff & flush
       const output = diffFramebuffers(prevFb, currentFb, fullRedraw);
+
       if (output.length > 0) {
         terminal.write(output);
       }
@@ -519,7 +532,22 @@ export function render(
     // ---- Resize handling ----
     const removeResizeListener = terminal.onResize(() => {
       fullRedraw = true;
-      scheduleRender();
+
+      // Clear stale image positions — they'll re-register at new positions
+      renderedImages.clear();
+
+      // Notify app-level resize subscribers (triggers React re-renders
+      // for useMediaQuery / <Match> via useSyncExternalStore).
+      for (const handler of resizeHandlers) {
+        handler();
+      }
+
+      // Render immediately at the new dimensions.  Responsive style
+      // values are resolved inside computeLayout so the layout adapts
+      // instantly.  Any React-driven changes (Match visibility,
+      // useMediaQuery state) will follow in a second render once the
+      // reconciler commits.
+      performRender();
     });
 
     // ---- SIGCONT: resume after Ctrl+Z suspend ----

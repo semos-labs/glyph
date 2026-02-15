@@ -4,7 +4,7 @@ import type { Cell } from "./framebuffer.js";
 import { Framebuffer } from "./framebuffer.js";
 import { getBorderChars } from "./borders.js";
 import { isLightColor } from "./color.js";
-import type { Color, Style } from "../types/index.js";
+import type { Color, ResolvedStyle } from "../types/index.js";
 import { wrapLines } from "../layout/textMeasure.js";
 import stringWidth from "string-width";
 import { parseAnsi, stripAnsi } from "./ansi.js";
@@ -55,7 +55,7 @@ export function paintTree(
 
   for (const root of roots) {
     if (root.hidden) continue;
-    collectPaintEntries(root, screenClip, root.style.zIndex ?? 0, entries);
+    collectPaintEntries(root, screenClip, root.resolvedStyle.zIndex ?? 0, entries);
   }
 
   // Sort by zIndex (stable sort preserves tree order within same z)
@@ -81,22 +81,32 @@ function collectPaintEntries(
 ): void {
   if (node.hidden) return;
 
-  const zIndex = node.style.zIndex ?? parentZ;
+  const zIndex = node.resolvedStyle.zIndex ?? parentZ;
 
-  // Compute clip for this node
-  const clip = node.style.clip ? intersectClip(parentClip, {
+  // Clip rect for THIS node's own painting (bg, border, text).
+  // Uses parentClip so the node can paint within its parent's bounds.
+  entries.push({ node, clip: parentClip, zIndex });
+
+  // Clip rect for CHILDREN.  Always intersect with this node's inner
+  // bounds so children can never paint outside this box — even when
+  // `clip` is not explicitly set.  In a terminal every cell is shared,
+  // so overflow from one sibling corrupts the next.
+  //
+  // When `clip: true` we use innerX/innerY (content area, inside
+  // border + padding) — the stricter variant used by ScrollView etc.
+  // Otherwise we still clip to inner bounds to prevent overflow while
+  // allowing children to paint in the padding area.
+  const childClip = intersectClip(parentClip, {
     x: node.layout.innerX,
     y: node.layout.innerY,
     width: node.layout.innerWidth,
     height: node.layout.innerHeight,
-  }) : parentClip;
-
-  entries.push({ node, clip: parentClip, zIndex });
+  });
 
   // Children - skip for text/input (leaf nodes for painting)
   if (node.type !== "text" && node.type !== "input") {
     for (const child of node.children) {
-      collectPaintEntries(child, clip, zIndex, entries);
+      collectPaintEntries(child, childClip, zIndex, entries);
     }
   }
 }
@@ -125,7 +135,7 @@ function paintNode(
   options: PaintOptions = {},
 ): PaintResult | undefined {
   const { x, y, width, height, innerX, innerY, innerWidth, innerHeight } = node.layout;
-  const style = node.style;
+  const style = node.resolvedStyle;
 
   if (width <= 0 || height <= 0) return;
 
@@ -236,8 +246,8 @@ function paintText(node: GlyphNode, fb: Framebuffer, clip: ClipRect): void {
   const segments = collectStyledSegments(node, inherited);
   if (segments.length === 0) return;
   
-  const wrapMode = node.style.wrap ?? "wrap";
-  const textAlign = node.style.textAlign ?? "left";
+  const wrapMode = node.resolvedStyle.wrap ?? "wrap";
+  const textAlign = node.resolvedStyle.textAlign ?? "left";
   
   // Build a flat array of styled characters, preserving style per character
   // Also track newlines for proper line handling
@@ -358,7 +368,7 @@ function paintInput(
     : "blackBright";
   const fg = isPlaceholder
     ? placeholderFg
-    : (autoFg ?? inherited.color ?? node.style.color);
+    : (autoFg ?? inherited.color ?? node.resolvedStyle.color);
   const textFg = isPlaceholder ? placeholderFg : fg;
   // Force dim for placeholder text to make it visually distinct
   const textDim = isPlaceholder ? true : inherited.dim;
@@ -368,7 +378,7 @@ function paintInput(
 
   if (multiline && !isPlaceholder) {
     // ── Multiline rendering with wrapping ─────────────────────
-    const wrapMode = node.style.wrap ?? "wrap";
+    const wrapMode = node.resolvedStyle.wrap ?? "wrap";
     const rawLines = displayText.split("\n");
     const wrappedLines = wrapLines(rawLines, innerWidth, wrapMode);
 

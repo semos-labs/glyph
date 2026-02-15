@@ -599,7 +599,7 @@ export function ScrollView({
           style: {
             ...innerStyle,
             // Reserve space for scrollbar when visible
-            paddingRight: scrollbarVisible ? (innerStyle.paddingRight ?? 0) + 1 : innerStyle.paddingRight,
+            paddingRight: scrollbarVisible ? ((innerStyle.paddingRight ?? 0) as number) + 1 : innerStyle.paddingRight,
           },
           ref: (node: any) => {
             contentRef.current = node ?? null;

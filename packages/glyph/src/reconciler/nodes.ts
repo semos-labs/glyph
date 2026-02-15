@@ -1,5 +1,5 @@
 import type { Node as YogaNode } from "yoga-layout";
-import type { Style, LayoutRect, Color } from "../types/index.js";
+import type { Style, ResolvedStyle, LayoutRect, Color } from "../types/index.js";
 
 export type GlyphNodeType = "box" | "text" | "input";
 
@@ -9,6 +9,8 @@ export interface GlyphNode {
   type: GlyphNodeType;
   props: Record<string, any>;
   style: Style;
+  /** Style with all responsive values resolved for the current terminal size. Populated by the layout system before each frame. */
+  resolvedStyle: ResolvedStyle;
   children: GlyphNode[];
   rawTextChildren: GlyphTextInstance[];
   /** All children in order (both nodes and raw text) for correct text composition */
@@ -47,6 +49,7 @@ export function createGlyphNode(
     type,
     props,
     style,
+    resolvedStyle: {} as ResolvedStyle,
     children: [],
     rawTextChildren: [],
     allChildren: [],
@@ -149,7 +152,7 @@ export function getInheritedTextStyle(node: GlyphNode): {
 
   let current: GlyphNode | null = node;
   while (current) {
-    const s = current.style;
+    const s = current.resolvedStyle;
     if (result.color === undefined && s.color !== undefined) result.color = s.color;
     if (result.bg === undefined && s.bg !== undefined) result.bg = s.bg;
     if (result.bold === undefined && s.bold !== undefined) result.bold = s.bold;
@@ -200,14 +203,14 @@ export function collectStyledSegments(
 ): TextSegment[] {
   const segments: TextSegment[] = [];
   
-  // Merge current node's style with inherited
+  // Merge current node's resolved style with inherited
   const currentStyle: TextStyleProps = {
-    color: node.style.color ?? inheritedStyle.color,
-    bg: node.style.bg ?? inheritedStyle.bg,
-    bold: node.style.bold ?? inheritedStyle.bold,
-    dim: node.style.dim ?? inheritedStyle.dim,
-    italic: node.style.italic ?? inheritedStyle.italic,
-    underline: node.style.underline ?? inheritedStyle.underline,
+    color: node.resolvedStyle.color ?? inheritedStyle.color,
+    bg: node.resolvedStyle.bg ?? inheritedStyle.bg,
+    bold: node.resolvedStyle.bold ?? inheritedStyle.bold,
+    dim: node.resolvedStyle.dim ?? inheritedStyle.dim,
+    italic: node.resolvedStyle.italic ?? inheritedStyle.italic,
+    underline: node.resolvedStyle.underline ?? inheritedStyle.underline,
   };
   
   // If no allChildren, use text directly

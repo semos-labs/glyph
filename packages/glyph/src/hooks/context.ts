@@ -62,9 +62,13 @@ export interface AppContextValue {
   registerNode(node: GlyphNode): void;
   unregisterNode(node: GlyphNode): void;
   scheduleRender(): void;
+  /** Force a full redraw of the entire screen (clear + repaint). */
+  forceRedraw(): void;
   exit(code?: number): void;
   columns: number;
   rows: number;
+  /** Subscribe to terminal resize events. Returns an unsubscribe function. */
+  onResize(handler: () => void): () => void;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

@@ -45,6 +45,29 @@ export function diffFramebuffers(
   let cursorY = -1;
   let lastSGR = "";
 
+  if (fullRedraw) {
+    // On full redraw (resize, first paint, force-redraw):
+    //  1. Disable auto-wrap — prevents the cursor from wrapping to the
+    //     next line when we write the very last column.  Some terminals
+    //     enter "pending-wrap" state which can interact badly with cursor
+    //     repositioning after resize.
+    //  2. Reset scroll region — removes any stale scroll-region that
+    //     could clip output.
+    //  3. Clear entire screen (\x1b[2J) — this is significantly more
+    //     robust than per-line \x1b[2K after a resize.  When a terminal
+    //     shrinks, many emulators wrap/reflow existing alt-screen content,
+    //     creating logical multi-row lines.  Per-line erase may only
+    //     erase the logical line, leaving wrapped remnants.  \x1b[2J
+    //     nukes everything unconditionally.
+    //  4. Home cursor — ensure we start from (0,0).
+    out += `${CSI}?7l`; // Disable auto-wrap
+    out += `${CSI}r`;   // Reset scroll region
+    out += `${CSI}2J`;  // Clear entire screen
+    out += `${CSI}H`;   // Home cursor
+    cursorX = 0;
+    cursorY = 0;
+  }
+
   for (let y = 0; y < next.height; y++) {
     for (let x = 0; x < next.width; x++) {
       const nc = next.get(x, y)!;
@@ -74,6 +97,12 @@ export function diffFramebuffers(
 
   if (out.length > 0) {
     out += `${CSI}0m`;
+  }
+
+  if (fullRedraw) {
+    // Re-enable auto-wrap so normal terminal behaviour is preserved
+    // for anything outside our paint cycle (e.g. images, cursor input).
+    out += `${CSI}?7h`;
   }
 
   return out;

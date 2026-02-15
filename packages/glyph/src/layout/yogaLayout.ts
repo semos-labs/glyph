@@ -11,8 +11,9 @@ import Yoga, {
 } from "yoga-layout";
 import type { Node as YogaNode } from "yoga-layout";
 import type { GlyphNode, GlyphContainer } from "../reconciler/nodes.js";
-import type { Style, DimensionValue } from "../types/index.js";
+import type { ResolvedStyle, DimensionValue } from "../types/index.js";
 import { measureText } from "./textMeasure.js";
+import { resolveNodeStyles } from "./responsive.js";
 
 const FLEX_DIR_MAP: Record<string, FlexDirection> = {
   row: FlexDirection.Row,
@@ -60,7 +61,7 @@ function setPosition(
   }
 }
 
-function applyStyleToYogaNode(yogaNode: YogaNode, style: Style, nodeType: string): void {
+function applyStyleToYogaNode(yogaNode: YogaNode, style: ResolvedStyle, nodeType: string): void {
   // Dimensions
   setDimension(yogaNode, (v) => yogaNode.setWidth(v as any), style.width);
   setDimension(yogaNode, (v) => yogaNode.setHeight(v as any), style.height);
@@ -132,7 +133,7 @@ function buildYogaTree(node: GlyphNode): void {
   const yogaNode = Yoga.Node.create();
   node.yogaNode = yogaNode;
 
-  applyStyleToYogaNode(yogaNode, node.style, node.type);
+  applyStyleToYogaNode(yogaNode, node.resolvedStyle, node.type);
 
   if (node.type === "text" || node.type === "input") {
     yogaNode.setMeasureFunc((width, widthMode, height, heightMode) => {
@@ -147,7 +148,7 @@ function buildYogaTree(node: GlyphNode): void {
         text,
         width,
         widthMode,
-        node.style.wrap ?? "wrap",
+        node.resolvedStyle.wrap ?? "wrap",
       );
     });
   } else {
@@ -183,7 +184,7 @@ function extractLayout(node: GlyphNode, parentX: number, parentY: number): void 
   const width = computedLayout.width;
   const height = computedLayout.height;
 
-  const borderWidth = node.style.border && node.style.border !== "none" ? 1 : 0;
+  const borderWidth = node.resolvedStyle.border && node.resolvedStyle.border !== "none" ? 1 : 0;
   const paddingTop = yn.getComputedPadding(Edge.Top);
   const paddingRight = yn.getComputedPadding(Edge.Right);
   const paddingBottom = yn.getComputedPadding(Edge.Bottom);
@@ -225,6 +226,9 @@ export function computeLayout(
   screenWidth: number,
   screenHeight: number,
 ): void {
+  // Resolve responsive style values for the current terminal dimensions
+  resolveNodeStyles(roots, screenWidth, screenHeight);
+
   // Create a virtual root Yoga node for the screen
   const rootYoga = Yoga.Node.create();
   rootYoga.setWidth(screenWidth);

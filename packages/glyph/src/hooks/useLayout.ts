@@ -26,7 +26,7 @@ const DEFAULT_RECT: LayoutRect = {
  *   <Text>Width: {layout.innerWidth} Height: {layout.innerHeight}</Text>
  * </Box>
  * ```
-  * @category Hooks
+ * @category Hooks
  */
 export function useLayout(nodeRef?: { current: GlyphNode | null }): LayoutRect {
   const ctx = useContext(LayoutContext);

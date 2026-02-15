@@ -28,6 +28,15 @@ export interface ProgressProps {
 /**
  * Horizontal progress bar with determinate and indeterminate modes.
  *
+ * In **determinate** mode the filled / empty proportions are rendered
+ * as two {@link Box} elements whose widths are controlled by Yoga
+ * (percentage + flexGrow).  This means the bar resizes instantly on
+ * terminal resize with no extra React render cycle.
+ *
+ * In **indeterminate** mode the marquee animation uses {@link useLayout}
+ * to read the exact track width.  The 100 ms animation timer provides
+ * frequent re-renders so any stale value is corrected quickly.
+ *
  * @example
  * ```tsx
  * // Determinate progress
@@ -39,7 +48,7 @@ export interface ProgressProps {
  * // Indeterminate marquee
  * <Progress indeterminate label="Loading..." />
  * ```
-  * @category Components
+ * @category Components
  */
 export function Progress({
   value,
@@ -51,11 +60,13 @@ export function Progress({
   filled = "█",
   empty = "░",
 }: ProgressProps): React.JSX.Element {
+  // ---- Indeterminate-only state ----
   const trackRef = useRef<GlyphNode | null>(null);
-  const trackLayout = useLayout(trackRef);
+  const trackLayout = useLayout(
+    indeterminate && value === undefined ? trackRef : undefined,
+  );
   const trackWidth = trackLayout.innerWidth;
 
-  // Indeterminate animation state
   const [indeterminatePos, setIndeterminatePos] = useState(0);
 
   useEffect(() => {
@@ -66,13 +77,22 @@ export function Progress({
     return () => clearInterval(timer);
   }, [indeterminate, trackWidth]);
 
+  // ---- Shared ----
   const clamped = Math.max(0, Math.min(1, value ?? 0));
   const pctText = showPercent ? ` ${Math.round(clamped * 100)}%` : "";
 
-  let barText = "";
-  if (trackWidth > 0) {
-    if (indeterminate && value === undefined) {
-      // Marquee: a 3-char chunk bouncing across the track
+  const children: React.ReactNode[] = [];
+
+  if (label) {
+    children.push(
+      React.createElement("text" as any, { key: "label", style: { bold: true } }, label + " "),
+    );
+  }
+
+  if (indeterminate && value === undefined) {
+    // ---- Indeterminate (marquee) — text-based, needs exact track width ----
+    let barText = "";
+    if (trackWidth > 0) {
       const chunkSize = Math.max(1, Math.min(3, Math.floor(trackWidth / 4)));
       const chars: string[] = [];
       for (let i = 0; i < trackWidth; i++) {
@@ -83,31 +103,49 @@ export function Progress({
         }
       }
       barText = chars.join("");
-    } else {
-      const filledCount = Math.round(clamped * trackWidth);
-      barText = filled.repeat(filledCount) + empty.repeat(trackWidth - filledCount);
     }
-  }
 
-  const children: React.ReactNode[] = [];
-
-  if (label) {
     children.push(
-      React.createElement("text" as any, { key: "label", style: { bold: true } }, label + " "),
+      React.createElement(
+        "box" as any,
+        {
+          key: "track",
+          style: { flexGrow: 1, flexShrink: 1 },
+          ref: (node: any) => { trackRef.current = node ?? null; },
+        },
+        React.createElement("text" as any, { key: "bar", style: {} }, barText),
+      ),
+    );
+  } else {
+    // ---- Determinate — single track box with bg = empty color ----
+    // The filled portion is a child box sized by percentage width.
+    // The empty portion is simply the track background showing through.
+    // This avoids Yoga rounding gaps between two sibling boxes.
+    const filledPct = Math.round(clamped * 100);
+    const filledBg = style?.color ?? "white";
+    const emptyBg = { r: 60, g: 60, b: 60 };
+
+    children.push(
+      React.createElement(
+        "box" as any,
+        {
+          key: "track",
+          style: {
+            flexGrow: 1,
+            flexShrink: 1,
+            height: 1,
+            bg: emptyBg,
+          },
+        },
+        filledPct > 0
+          ? React.createElement(
+              "box" as any,
+              { key: "filled", style: { width: `${filledPct}%`, height: 1, bg: filledBg } },
+            )
+          : undefined,
+      ),
     );
   }
-
-  children.push(
-    React.createElement(
-      "box" as any,
-      {
-        key: "track",
-        style: { flexGrow: 1, flexShrink: 1 },
-        ref: (node: any) => { trackRef.current = node ?? null; },
-      },
-      React.createElement("text" as any, { key: "bar", style: {} }, barText),
-    ),
-  );
 
   if (showPercent) {
     children.push(

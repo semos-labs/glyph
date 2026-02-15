@@ -12,13 +12,8 @@
 name: Push Docs to Website
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "packages/glyph/src/**"
-      - "typedoc.json"
-      - "scripts/postprocess-docs.ts"
-      - ".github/workflows/docs.yml"
+  release:
+    types: [published]
   workflow_dispatch:
 
 jobs:

@@ -40,9 +40,9 @@ export interface RadioProps<T = string> {
   direction?: "row" | "column";
   /** Gap between items (default: 0) */
   gap?: number;
-  /** Custom character for selected state (default: "●") */
+  /** Custom character for selected state (default: "(●)") */
   selectedChar?: string;
-  /** Custom character for unselected state (default: "○") */
+  /** Custom character for unselected state (default: "(○)") */
   unselectedChar?: string;
 }
 
@@ -57,8 +57,8 @@ function RadioInner<T = string>({
   disabled,
   direction = "column",
   gap = 0,
-  selectedChar = "●",
-  unselectedChar = "○",
+  selectedChar = "(●)",
+  unselectedChar = "(○)",
   forwardedRef,
 }: RadioProps<T> & { forwardedRef?: React.Ref<RadioHandle<T>> }): React.JSX.Element {
   const focusCtx = useContext(FocusContext);
@@ -226,7 +226,7 @@ function RadioInner<T = string>({
       React.createElement(
         "text" as any,
         { key: "radio", style: { color: textColor } },
-        `(${radioChar})`,
+        radioChar,
       ),
       React.createElement(
         "text" as any,

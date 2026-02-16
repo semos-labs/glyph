@@ -87,21 +87,21 @@ function collectPaintEntries(
   // Uses parentClip so the node can paint within its parent's bounds.
   entries.push({ node, clip: parentClip, zIndex });
 
-  // Clip rect for CHILDREN.  Always intersect with this node's inner
-  // bounds so children can never paint outside this box — even when
-  // `clip` is not explicitly set.  In a terminal every cell is shared,
-  // so overflow from one sibling corrupts the next.
-  //
-  // When `clip: true` we use innerX/innerY (content area, inside
-  // border + padding) — the stricter variant used by ScrollView etc.
-  // Otherwise we still clip to inner bounds to prevent overflow while
-  // allowing children to paint in the padding area.
-  const childClip = intersectClip(parentClip, {
-    x: node.layout.innerX,
-    y: node.layout.innerY,
-    width: node.layout.innerWidth,
-    height: node.layout.innerHeight,
-  });
+  // Clip rect for CHILDREN.
+  // Only clip when the node explicitly opts in via `clip: true`
+  // (e.g. ScrollView).  Without it, children are free to paint outside
+  // the parent — which is required for absolute-positioned overlays
+  // like Select dropdowns, tooltips, and dialogs.
+  // The full-screen clear on resize (`\x1b[2J` in diff.ts) handles
+  // stale pixels from layout shifts, so forced clipping isn't needed.
+  const childClip = node.resolvedStyle.clip
+    ? intersectClip(parentClip, {
+      x: node.layout.innerX,
+      y: node.layout.innerY,
+      width: node.layout.innerWidth,
+      height: node.layout.innerHeight,
+    })
+    : parentClip;
 
   // Children - skip for text/input (leaf nodes for painting)
   if (node.type !== "text" && node.type !== "input") {

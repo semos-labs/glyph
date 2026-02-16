@@ -246,8 +246,7 @@ export const Select = forwardRef<SelectHandle, SelectProps>(
       if (!isOpen) {
         if (
           key.name === "return" ||
-          key.name === " " ||
-          key.sequence === " "
+          key.name === "space"
         ) {
           setIsOpen(true);
           setSearchText("");

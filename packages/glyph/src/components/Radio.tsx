@@ -162,7 +162,7 @@ function RadioInner<T = string>({
       }
 
       // Select current item
-      if (key.name === "return" || key.name === " " || key.sequence === " ") {
+      if (key.name === "return" || key.name === "space") {
         const item = items[highlightedIndex];
         if (item && !item.disabled) {
           onChangeRef.current(item.value);

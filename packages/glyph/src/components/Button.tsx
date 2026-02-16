@@ -103,7 +103,7 @@ export const Button = forwardRef<ButtonHandle, ButtonProps>(
 
       const handler = (key: Key): boolean => {
         if (focusCtx?.focusedId !== fid) return false;
-        if (key.name === "return" || key.name === " " || key.sequence === " ") {
+        if (key.name === "return" || key.name === "space") {
           onPressRef.current?.();
           return true;
         }

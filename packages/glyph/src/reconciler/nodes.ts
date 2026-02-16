@@ -63,12 +63,24 @@ export function createGlyphNode(
 }
 
 export function appendChild(parent: GlyphNode, child: GlyphNode): void {
+  // Remove from old position if already a child (React reorders via appendChild)
+  const existingIdx = parent.children.indexOf(child);
+  if (existingIdx !== -1) parent.children.splice(existingIdx, 1);
+  const existingAllIdx = parent.allChildren.indexOf(child);
+  if (existingAllIdx !== -1) parent.allChildren.splice(existingAllIdx, 1);
+
   child.parent = parent;
   parent.children.push(child);
   parent.allChildren.push(child);
 }
 
 export function appendTextChild(parent: GlyphNode, child: GlyphTextInstance): void {
+  // Remove from old position if already a child (React reorders via appendChild)
+  const existingRawIdx = parent.rawTextChildren.indexOf(child);
+  if (existingRawIdx !== -1) parent.rawTextChildren.splice(existingRawIdx, 1);
+  const existingAllIdx = parent.allChildren.indexOf(child);
+  if (existingAllIdx !== -1) parent.allChildren.splice(existingAllIdx, 1);
+
   child.parent = parent;
   parent.rawTextChildren.push(child);
   parent.allChildren.push(child);
@@ -101,6 +113,12 @@ export function insertBefore(
   child: GlyphNode,
   beforeChild: GlyphNode,
 ): void {
+  // Remove from old position if already a child (React reorders via insertBefore)
+  const existingIdx = parent.children.indexOf(child);
+  if (existingIdx !== -1) parent.children.splice(existingIdx, 1);
+  const existingAllIdx = parent.allChildren.indexOf(child);
+  if (existingAllIdx !== -1) parent.allChildren.splice(existingAllIdx, 1);
+
   child.parent = parent;
   const idx = parent.children.indexOf(beforeChild);
   if (idx !== -1) {
@@ -122,6 +140,12 @@ export function insertTextBefore(
   child: GlyphTextInstance,
   beforeChild: GlyphChild,
 ): void {
+  // Remove from old position if already a child (React reorders via insertBefore)
+  const existingRawIdx = parent.rawTextChildren.indexOf(child);
+  if (existingRawIdx !== -1) parent.rawTextChildren.splice(existingRawIdx, 1);
+  const existingAllIdx = parent.allChildren.indexOf(child);
+  if (existingAllIdx !== -1) parent.allChildren.splice(existingAllIdx, 1);
+
   child.parent = parent;
   parent.rawTextChildren.push(child);
   const allIdx = parent.allChildren.indexOf(beforeChild);

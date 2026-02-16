@@ -44,6 +44,10 @@ export { Image } from "./components/Image.js";
 export type { ImageProps, ImageState } from "./components/Image.js";
 export { Match } from "./components/Match.js";
 export type { MatchProps } from "./components/Match.js";
+export { ScopedKeybinds } from "./components/ScopedKeybinds.js";
+export type { ScopedKeybindsProps, ActionHandlers } from "./components/ScopedKeybinds.js";
+export { StatusBar, useStatusBar } from "./components/StatusBar.js";
+export type { StatusBarProps, StatusBarMessage, StatusBarContextValue, MessageType } from "./components/StatusBar.js";
 
 // Hooks
 export { useInput } from "./hooks/useInput.js";
@@ -60,6 +64,8 @@ export { useMediaQuery } from "./hooks/useMediaQuery.js";
 // Utilities
 export { createMask, masks } from "./utils/mask.js";
 export type { MaskOptions } from "./utils/mask.js";
+export { createKeybindRegistry } from "./utils/keybinds.js";
+export type { KeybindDef, CommandDef, KeybindRegistry, HelpOptions } from "./utils/keybinds.js";
 export { parseAnsi, stripAnsi } from "./paint/ansi.js";
 export type { AnsiStyle, StyledSegment } from "./paint/ansi.js";
 export { detectTerminalCapabilities, supportsInlineImages } from "./runtime/terminalCapabilities.js";

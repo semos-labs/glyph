@@ -183,6 +183,12 @@ export const hostConfig = {
     } else if (beforeChild.type === "raw-text") {
       // Insert node before a text child - need to handle allChildren ordering
       const node = child as GlyphNode;
+      // Remove from old position if already a child (React reorders)
+      const existingIdx = parentInstance.children.indexOf(node);
+      if (existingIdx !== -1) parentInstance.children.splice(existingIdx, 1);
+      const existingAllIdx = parentInstance.allChildren.indexOf(node);
+      if (existingAllIdx !== -1) parentInstance.allChildren.splice(existingAllIdx, 1);
+
       node.parent = parentInstance;
       parentInstance.children.push(node);
       const allIdx = parentInstance.allChildren.indexOf(beforeChild as GlyphChild);

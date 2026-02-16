@@ -211,6 +211,19 @@
         "typescript": "^5.5",
       },
     },
+    "examples/statusbar-demo": {
+      "name": "statusbar-demo",
+      "dependencies": {
+        "@semos-labs/glyph": "workspace:*",
+        "react": "^19.0.0",
+      },
+      "devDependencies": {
+        "@types/node": "^20",
+        "@types/react": "^19",
+        "tsx": "^4",
+        "typescript": "^5.5",
+      },
+    },
     "examples/styled-text": {
       "name": "styled-text-example",
       "dependencies": {
@@ -227,7 +240,7 @@
     },
     "packages/create-glyph": {
       "name": "@semos-labs/create-glyph",
-      "version": "0.1.86",
+      "version": "0.1.91",
       "bin": {
         "create-glyph": "./dist/index.js",
       },
@@ -239,7 +252,7 @@
     },
     "packages/glyph": {
       "name": "@semos-labs/glyph",
-      "version": "0.1.86",
+      "version": "0.1.91",
       "dependencies": {
         "react-reconciler": "^0.31.0",
         "string-width": "^7.2.0",
@@ -530,6 +543,8 @@
     "showcase": ["showcase@workspace:examples/showcase"],
 
     "source-map": ["source-map@0.7.6", "", {}, "sha512-i5uvt8C3ikiWeNZSVZNWcfZPItFQOsYTUAOkcUPGd8DqDy1uOUikjt5dG+uRlwyvR108Fb9DOd4GvXfT0N2/uQ=="],
+
+    "statusbar-demo": ["statusbar-demo@workspace:examples/statusbar-demo"],
 
     "string-width": ["string-width@7.2.0", "", { "dependencies": { "emoji-regex": "10.6.0", "get-east-asian-width": "1.4.0", "strip-ansi": "7.1.2" } }, "sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ=="],
 

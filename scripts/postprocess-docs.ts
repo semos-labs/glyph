@@ -622,6 +622,35 @@ for (const [, page] of primaries) {
   console.log(`   ✓ ${page.folder}/${page.slug}.md (+ ${page.mergedSymbols.length} merged)`);
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Sort priority: Components → Hooks → Utilities → Types (then alpha)
+// ────────────────────────────────────────────────────────────────────
+
+function sortPriority(symbol: string, typedocFiles: Map<string, string>): number {
+  const tdKey = typedocFiles.get(symbol);
+  const isPascalCase = /^[A-Z]/.test(symbol);
+  const isHook = symbol.startsWith("use");
+  const isType = tdKey?.startsWith("interfaces/") || tdKey?.startsWith("type-aliases/");
+
+  if (isPascalCase && !isType) return 0;  // Components (PascalCase non-types)
+  if (isHook) return 1;                    // Hooks (use*)
+  if (!isPascalCase && !isType) return 2;  // Utility functions & constants
+  if (isType) return 3;                    // Types
+
+  return 4;
+}
+
+function comparePrimaries(
+  a: PrimaryPage,
+  b: PrimaryPage,
+  tdFiles: Map<string, string>,
+): number {
+  const pa = sortPriority(a.symbol, tdFiles);
+  const pb = sortPriority(b.symbol, tdFiles);
+  if (pa !== pb) return pa - pb;
+  return a.symbol.localeCompare(b.symbol);
+}
+
 // Step 6: Generate index
 const categoryLabels: Record<string, string> = {
   Layout:      "Layout",
@@ -644,7 +673,7 @@ const indexParts: string[] = [
 for (const [catName, folder] of Object.entries(CATEGORY_FOLDERS)) {
   const catPages = [...primaries.values()]
     .filter((p) => p.category === catName)
-    .sort((a, b) => a.symbol.localeCompare(b.symbol));
+    .sort((a, b) => comparePrimaries(a, b, typedocFiles));
 
   if (catPages.length === 0) continue;
 
@@ -665,7 +694,7 @@ const sidebar = Object.entries(CATEGORY_FOLDERS)
     label: categoryLabels[catName] || catName,
     items: [...primaries.values()]
       .filter((p) => p.category === catName)
-      .sort((a, b) => a.symbol.localeCompare(b.symbol))
+      .sort((a, b) => comparePrimaries(a, b, typedocFiles))
       .map((p) => ({ label: p.symbol, link: `/glyph/api/${folder}/${p.slug}/` })),
   }))
   .filter((g) => g.items.length > 0);

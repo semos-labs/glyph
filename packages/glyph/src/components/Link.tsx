@@ -93,7 +93,7 @@ export interface LinkProps {
  *   Documentation
  * </Link>
  * ```
- * @category Components
+ * @category Navigation
  */
 export const Link = forwardRef<LinkHandle, LinkProps>(
   function Link({ href, style, focusedStyle, children, focusable = true, disabled = false, onOpen }, ref) {

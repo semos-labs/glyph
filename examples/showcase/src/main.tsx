@@ -197,7 +197,10 @@ function ServiceCard({ service }: { service: Service }) {
         <Box style={{ flexDirection: "row" }}>
           <Text style={{ bold: true, color: C.text }}>{name}</Text>
           <Spacer />
-          <Text style={{ color: statusColor }}>{STATUS_DOT[status]}</Text>
+          <Text style={{ color: C.dim }}>
+            {rps > 0 ? `${(rps / 1000).toFixed(1)}k` : "off"}
+          </Text>
+          <Text style={{ color: statusColor }}> {STATUS_DOT[status]}</Text>
         </Box>
 
         <Box style={{ flexDirection: "row", gap: 1 }}>
@@ -205,18 +208,11 @@ function ServiceCard({ service }: { service: Service }) {
           <Box style={{ flexGrow: 1 }}>
             <Progress value={cpu} style={{ color: cpuColor }} />
           </Box>
-        </Box>
-
-        <Box style={{ flexDirection: "row", gap: 1 }}>
           <Text style={{ color: C.muted }}>mem</Text>
           <Box style={{ flexGrow: 1 }}>
             <Progress value={mem} style={{ color: memColor }} />
           </Box>
         </Box>
-
-        <Text style={{ color: C.dim }}>
-          {rps > 0 ? `${(rps / 1000).toFixed(1)}k req/s` : "offline"}
-        </Text>
       </Box>
     </Box>
   );
@@ -290,7 +286,6 @@ function DeployPanel() {
         flexDirection: "column",
         bg: C.surface,
         paddingX: 1,
-        paddingTop: 1,
         flexGrow: 1,
         flexShrink: 1,
         minWidth: 0,
@@ -375,7 +370,7 @@ function DeployPanel() {
 
 function ActivityLog() {
   const isWide = useMediaQuery({ minColumns: 100 });
-  const maxEvents = isWide ? EVENTS.length : 5;
+  const maxEvents = isWide ? 6 : 4;
 
   return (
     <Box
@@ -383,7 +378,6 @@ function ActivityLog() {
         flexDirection: "column",
         bg: C.surface,
         paddingX: 1,
-        paddingTop: 1,
         flexGrow: 1,
         flexShrink: 1,
         minWidth: 0,
@@ -417,37 +411,36 @@ function QuickLinks() {
   return (
     <Box
       style={{
-        flexDirection: "column",
+        flexDirection: "row",
         bg: C.surface,
         paddingX: 1,
-        paddingTop: 1,
         flexShrink: 0,
+        gap: 2,
+        alignItems: "center",
       }}
     >
       <Text style={{ bold: true, color: C.text }}>links</Text>
-      <Box style={{ flexDirection: "row", gap: 2 }}>
-        <Link
-          href="https://github.com"
-          style={{ color: C.dim }}
-          focusedStyle={{ color: "cyanBright", underline: true }}
-        >
-          <Text>📚 documentation</Text>
-        </Link>
-        <Link
-          href="https://example.com/status"
-          style={{ color: C.dim }}
-          focusedStyle={{ color: "cyanBright", underline: true }}
-        >
-          <Text>🟢 status page</Text>
-        </Link>
-        <Link
-          href="https://example.com/support"
-          style={{ color: C.dim }}
-          focusedStyle={{ color: "cyanBright", underline: true }}
-        >
-          <Text>💬 support</Text>
-        </Link>
-      </Box>
+      <Link
+        href="https://github.com"
+        style={{ color: C.dim }}
+        focusedStyle={{ color: "cyanBright", underline: true }}
+      >
+        <Text>↗ documentation</Text>
+      </Link>
+      <Link
+        href="https://example.com/status"
+        style={{ color: C.dim }}
+        focusedStyle={{ color: "cyanBright", underline: true }}
+      >
+        <Text>↗ status page</Text>
+      </Link>
+      <Link
+        href="https://example.com/support"
+        style={{ color: C.dim }}
+        focusedStyle={{ color: "cyanBright", underline: true }}
+      >
+        <Text>↗ support</Text>
+      </Link>
     </Box>
   );
 }
@@ -461,6 +454,7 @@ function Footer() {
         flexDirection: "row",
         paddingX: 2,
         bg: C.surface,
+        flexShrink: 0,
       }}
     >
       <Text style={{ color: C.muted }}>
@@ -503,10 +497,10 @@ function App() {
         <Text style={{ bold: true, color: C.text }}>services</Text>
         <ServiceGrid />
 
-        {/* <Box style={{ flexDirection: "row", gap: 1, flexGrow: 1 }}> */}
-        {/*   <DeployPanel /> */}
-        {/*   <ActivityLog /> */}
-        {/* </Box> */}
+        <Box style={{ flexDirection: "row", gap: 1 }}>
+          <DeployPanel />
+          <ActivityLog />
+        </Box>
 
         <QuickLinks />
       </Box>

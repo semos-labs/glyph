@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Release script for Glyph
- * 
+ *
  * Usage:
  *   bun release           # Bump patch version (0.0.1 -> 0.0.2)
  *   bun release --minor   # Bump minor version (0.0.1 -> 0.1.0)
@@ -10,70 +10,85 @@
 
 import { $ } from "bun";
 
-// Parse arguments
+// ── Colors ──────────────────────────────────────────────────────────────────
+
+const bold = (s: string) => `\x1b[1m${s}\x1b[22m`;
+const dim = (s: string) => `\x1b[2m${s}\x1b[22m`;
+const cyan = (s: string) => `\x1b[36m${s}\x1b[39m`;
+const green = (s: string) => `\x1b[32m${s}\x1b[39m`;
+const red = (s: string) => `\x1b[31m${s}\x1b[39m`;
+const yellow = (s: string) => `\x1b[33m${s}\x1b[39m`;
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+$.throws(false); // we handle errors ourselves
+
+function ok(msg: string) { console.log(`  ${green("✓")} ${msg}`); }
+function fail(msg: string) { console.error(`  ${red("✗")} ${msg}`); }
+function warn(msg: string) { console.log(`  ${yellow("⚠")} ${msg}`); }
+
+// ── Main ────────────────────────────────────────────────────────────────────
+
 const args = process.argv.slice(2);
-const bumpType = args.includes("--major") ? "major" 
-              : args.includes("--minor") ? "minor" 
-              : "patch";
+
+if (args.includes("-h") || args.includes("--help")) {
+  console.log();
+  console.log(`  ${bold("release")} ${dim("— tag & publish a new Glyph version")}`);
+  console.log();
+  console.log(`  ${bold("Usage:")}`);
+  console.log(`    ${cyan("bun release")}           ${dim("patch bump  (0.0.1 → 0.0.2)")}`);
+  console.log(`    ${cyan("bun release --minor")}   ${dim("minor bump  (0.0.1 → 0.1.0)")}`);
+  console.log(`    ${cyan("bun release --major")}   ${dim("major bump  (0.0.1 → 1.0.0)")}`);
+  console.log();
+  process.exit(0);
+}
+
+const bumpType = args.includes("--major") ? "major"
+  : args.includes("--minor") ? "minor"
+  : "patch";
 
 async function main() {
-  console.log("🚀 Starting release process...\n");
+  console.log();
 
-  // 1. Check if work tree is clean
-  console.log("📋 Checking work tree...");
+  // 1. Clean work tree
   const status = await $`git status --porcelain`.text();
-  
   if (status.trim() !== "") {
-    console.error("❌ Work tree is not clean. Please commit or stash your changes first.");
-    console.error("\nUncommitted changes:");
-    console.error(status);
+    fail("Work tree is not clean — commit or stash first");
+    console.log(dim(status.trimEnd().split("\n").map(l => `      ${l}`).join("\n")));
+    console.log();
     process.exit(1);
   }
-  console.log("✅ Work tree is clean\n");
 
-  // 2. Get latest tag
-  console.log("🏷️  Getting latest tag...");
+  // 2. Resolve current version from latest tag
   let latestTag: string;
   try {
     latestTag = (await $`git describe --tags --abbrev=0`.text()).trim();
   } catch {
-    // No tags exist yet, start from v0.0.0
     latestTag = "v0.0.0";
-    console.log("   No existing tags found, starting from v0.0.0");
   }
-  console.log(`   Latest tag: ${latestTag}\n`);
 
-  // 3. Parse and bump version
-  const versionMatch = latestTag.match(/^v?(\d+)\.(\d+)\.(\d+)$/);
-  if (!versionMatch) {
-    console.error(`❌ Invalid tag format: ${latestTag}. Expected v0.0.0 format.`);
+  const m = latestTag.match(/^v?(\d+)\.(\d+)\.(\d+)$/);
+  if (!m) {
+    fail(`Invalid tag format: ${bold(latestTag)}`);
+    console.log();
     process.exit(1);
   }
 
-  let [, major, minor, patch] = versionMatch.map(Number);
-  
+  let [, major, minor, patch] = m.map(Number);
+
   switch (bumpType) {
-    case "major":
-      major!++;
-      minor = 0;
-      patch = 0;
-      break;
-    case "minor":
-      minor!++;
-      patch = 0;
-      break;
-    case "patch":
-      patch!++;
-      break;
+    case "major": major!++; minor = 0; patch = 0; break;
+    case "minor": minor!++; patch = 0; break;
+    case "patch": patch!++; break;
   }
 
-  const newVersion = `v${major}.${minor}.${patch}`;
-  console.log(`📦 Bumping ${bumpType} version: ${latestTag} → ${newVersion}\n`);
+  const version = `${major}.${minor}.${patch}`;
+  const tag = `v${version}`;
 
-  // 4. Update package.json versions (glyph + create-glyph)
-  console.log("📝 Updating package versions...");
-  const versionStr = `${major}.${minor}.${patch}`;
+  console.log(`  ${bold(latestTag)} ${dim("→")} ${bold(cyan(tag))} ${dim(`(${bumpType})`)}`);
+  console.log();
 
+  // 3. Update package.json files
   const packagePaths = [
     "./packages/glyph/package.json",
     "./packages/create-glyph/package.json",
@@ -81,51 +96,49 @@ async function main() {
 
   for (const pkgPath of packagePaths) {
     const pkg = await Bun.file(pkgPath).json();
-    pkg.version = versionStr;
+    pkg.version = version;
     await Bun.write(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
-    console.log(`   ${pkg.name} → ${versionStr}`);
   }
-  console.log();
+  ok("Updated package versions");
 
-  // 5. Commit the version bump (skip if nothing changed)
-  console.log("💾 Committing version bump...");
+  // 4. Commit version bump
   for (const pkgPath of packagePaths) {
     await $`git add ${pkgPath}`;
   }
   const diff = await $`git diff --cached --name-only`.text();
   if (diff.trim()) {
-    await $`git commit -m "chore: bump version to ${newVersion}"`;
-    console.log("✅ Committed\n");
+    await $`git commit -m ${"chore: bump version to " + tag}`.quiet();
+    ok("Committed version bump");
   } else {
-    console.log("⏭️  Versions already up to date, skipping commit\n");
+    ok("Versions already up to date");
   }
 
-  // 6. Create and push tag
-  console.log(`🏷️  Creating tag ${newVersion}...`);
-  await $`git tag -a ${newVersion} -m "Release ${newVersion}"`;
-  console.log("✅ Tag created\n");
+  // 5. Tag
+  await $`git tag -a ${tag} -m ${"Release " + tag}`;
+  ok(`Tagged ${bold(tag)}`);
 
-  console.log("⬆️  Pushing to origin...");
-  await $`git push origin main`;
-  await $`git push origin ${newVersion}`;
-  console.log("✅ Pushed\n");
+  // 6. Push
+  await $`git push origin main`.quiet();
+  await $`git push origin ${tag}`.quiet();
+  ok("Pushed to origin");
 
-  // 7. Create GitHub release
-  console.log("📢 Creating GitHub release...");
-  try {
-    await $`gh release create ${newVersion} --generate-notes --title ${newVersion}`;
-    console.log("✅ GitHub release created\n");
-  } catch (err) {
-    console.error("⚠️  Failed to create GitHub release. You may need to create it manually.");
-    console.error("   Make sure 'gh' CLI is installed and authenticated.");
-    console.error(`   Run: gh release create ${newVersion} --generate-notes --title ${newVersion}\n`);
+  // 7. GitHub release
+  const gh = await $`gh release create ${tag} --generate-notes --title ${tag}`.quiet();
+  if (gh.exitCode === 0) {
+    ok("Created GitHub release");
+  } else {
+    warn(`Could not create GitHub release — run manually:`);
+    console.log(`      ${cyan(`gh release create ${tag} --generate-notes --title ${tag}`)}`);
   }
 
-  console.log(`🎉 Release ${newVersion} complete!`);
-  console.log(`   View at: https://github.com/semos-labs/glyph/releases/tag/${newVersion}`);
+  console.log();
+  console.log(`  ${dim("View:")} ${cyan(`https://github.com/semos-labs/glyph/releases/tag/${tag}`)}`);
+  console.log();
 }
 
 main().catch((err) => {
-  console.error("❌ Release failed:", err.message);
+  console.log();
+  fail(err.message);
+  console.log();
   process.exit(1);
 });

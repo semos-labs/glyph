@@ -180,7 +180,7 @@ export const Link = forwardRef<LinkHandle, LinkProps>(
       "box" as any,
       {
         style: mergedStyle,
-        focusable: focusable && !disabled,
+        focusable,
         ref: (node: any) => {
           if (node) {
             nodeRef.current = node;

@@ -1,6 +1,6 @@
 {
   "name": "@semos-labs/create-glyph",
-  "version": "0.1.92",
+  "version": "0.1.93",
   "description": "Scaffold a new Glyph terminal UI app",
   "type": "module",
   "bin": {

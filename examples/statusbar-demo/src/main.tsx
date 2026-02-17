@@ -52,6 +52,18 @@ const registry = createKeybindRegistry<Scope>({
     { key: "", display: "", description: "Show archived notes", action: "showArchived", command: "archived" },
     { key: "", display: "", description: "Unarchive all notes", action: "unarchiveAll", command: "unarchive-all" },
     { key: "", display: "", description: "Show version info", action: "version", command: "version" },
+    { key: "", display: "", description: "Create a new note", action: "newNote", command: "new" },
+    { key: "", display: "", description: "Delete current note permanently", action: "deleteNote", command: "delete" },
+    { key: "", display: "", description: "Duplicate current note", action: "duplicateNote", command: "duplicate" },
+    { key: "", display: "", description: "Rename current note", action: "renameNote", command: "rename" },
+    { key: "", display: "", description: "Export notes as JSON", action: "exportJson", command: "export" },
+    { key: "", display: "", description: "Import notes from JSON", action: "importJson", command: "import" },
+    { key: "", display: "", description: "Sort notes alphabetically", action: "sortAlpha", command: "sort-alpha" },
+    { key: "", display: "", description: "Sort notes by date", action: "sortDate", command: "sort-date" },
+    { key: "", display: "", description: "Pin all visible notes", action: "pinAll", command: "pin-all" },
+    { key: "", display: "", description: "Unpin all notes", action: "unpinAll", command: "unpin-all" },
+    { key: "", display: "", description: "Toggle dark/light theme", action: "toggleTheme", command: "theme" },
+    { key: "", display: "", description: "Show note statistics", action: "stats", command: "stats" },
   ],
   list: [
     { key: "j", display: "j / ↓", description: "Next note", action: "next" },
@@ -443,6 +455,64 @@ function NoteApp({
         break;
       case "star":
         starNote();
+        break;
+      case "newNote": {
+        const id = Date.now();
+        setNotes((prev: Note[]) => [
+          { id, title: `Untitled ${prev.length + 1}`, body: "", pinned: false, archived: false },
+          ...prev,
+        ]);
+        bar.showMessage({ text: "New note created", type: "success" });
+        break;
+      }
+      case "deleteNote":
+        if (selectedNote) {
+          const title = selectedNote.title;
+          setNotes((prev: Note[]) => prev.filter((n: Note) => n.id !== selectedNote.id));
+          bar.showMessage({ text: `Deleted "${title}"`, type: "warning" });
+        }
+        break;
+      case "duplicateNote":
+        if (selectedNote) {
+          const dup = { ...selectedNote, id: Date.now(), title: `${selectedNote.title} (copy)` };
+          setNotes((prev: Note[]) => [...prev, dup]);
+          bar.showMessage({ text: `Duplicated "${selectedNote.title}"`, type: "success" });
+        }
+        break;
+      case "renameNote":
+        bar.showMessage({ text: "Use :rename <new name> to rename", type: "info" });
+        break;
+      case "exportJson":
+        bar.showMessage({ text: `Exported ${notes.length} notes`, type: "success" });
+        break;
+      case "importJson":
+        bar.showMessage({ text: "Import not available in demo", type: "warning" });
+        break;
+      case "sortAlpha":
+        setNotes((prev: Note[]) => [...prev].sort((a, b) => a.title.localeCompare(b.title)));
+        bar.showMessage({ text: "Sorted alphabetically", type: "success" });
+        break;
+      case "sortDate":
+        setNotes((prev: Note[]) => [...prev].sort((a, b) => a.id - b.id));
+        bar.showMessage({ text: "Sorted by date", type: "success" });
+        break;
+      case "pinAll":
+        setNotes((prev: Note[]) => prev.map((n: Note) => ({ ...n, pinned: true })));
+        bar.showMessage({ text: "Pinned all notes", type: "success" });
+        break;
+      case "unpinAll":
+        setNotes((prev: Note[]) => prev.map((n: Note) => ({ ...n, pinned: false })));
+        bar.showMessage({ text: "Unpinned all notes", type: "success" });
+        break;
+      case "toggleTheme":
+        bar.showMessage({ text: "Theme toggled (demo only)", type: "info" });
+        break;
+      case "stats":
+        bar.showMessage({
+          text: `${notes.length} notes — ${notes.filter((n: Note) => n.pinned).length} pinned, ${notes.filter((n: Note) => n.archived).length} archived`,
+          type: "info",
+          durationMs: 5000,
+        });
         break;
     }
   };

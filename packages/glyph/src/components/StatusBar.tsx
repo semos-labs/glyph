@@ -13,6 +13,7 @@ import type { KeybindRegistry, CommandDef } from "../utils/keybinds.js";
 import { Input } from "./Input.js";
 import { Keybind } from "./Keybind.js";
 import { FocusScope } from "./FocusScope.js";
+import { ScrollView } from "./ScrollView.js";
 
 // ---- Message Types --------------------------------------------------------
 
@@ -217,7 +218,9 @@ function CommandPalette({ commands, selectedIndex, input }: CommandPaletteProps)
     );
   }
 
-  const visibleHeight = Math.min(PALETTE_MAX_HEIGHT, filteredCommands.length + 1);
+  const maxVisible = PALETTE_MAX_HEIGHT - 1; // one row reserved for the header
+  const total = filteredCommands.length;
+  const visibleHeight = Math.min(PALETTE_MAX_HEIGHT, total + 1);
 
   return React.createElement(
     "box" as any,
@@ -237,13 +240,19 @@ function CommandPalette({ commands, selectedIndex, input }: CommandPaletteProps)
     React.createElement(
       "box" as any,
       { style: { paddingX: 1, flexDirection: "row" as const, justifyContent: "space-between" as const } satisfies Style },
-      React.createElement("text" as any, { style: { dim: true } }, `Commands (${filteredCommands.length})`),
+      React.createElement("text" as any, { style: { dim: true } }, `Commands (${total})`),
       React.createElement("text" as any, { style: { dim: true } }, "↑↓ Tab:fill"),
     ),
-    // Command list
+    // Command list (scrollable)
     React.createElement(
-      "box" as any,
-      { style: { height: Math.min(PALETTE_MAX_HEIGHT - 1, filteredCommands.length) } satisfies Style },
+      ScrollView,
+      {
+        style: { height: Math.min(maxVisible, total), bg: "blackBright" as Color } satisfies Style,
+        scrollOffset: Math.max(0, selectedIndex - maxVisible + 1),
+        disableKeyboard: true,
+        focusable: false,
+        showScrollbar: total > maxVisible,
+      },
       ...filteredCommands.map((cmd, index) => {
         const isSelected = index === selectedIndex;
         return React.createElement(

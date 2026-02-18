@@ -6,8 +6,39 @@ import { ttyCharWidth } from "../utils/ttyWidth.js";
 const ESC = "\x1b";
 const CSI = `${ESC}[`;
 
-function moveCursor(x: number, y: number): string {
-  return `${CSI}${y + 1};${x + 1}H`;
+// ── Pre-allocated output buffer ─────────────────────────────────
+// Reused across frames to avoid per-frame allocation.  Grows as
+// needed, never shrinks.  We build all escape sequences + text into
+// this buffer and return a string at the very end via toString().
+
+let buf = Buffer.allocUnsafe(1 << 16); // 64 KB initial
+let off = 0;
+
+function ensureCapacity(bytes: number): void {
+  if (off + bytes > buf.length) {
+    const next = Buffer.allocUnsafe(Math.max(buf.length << 1, off + bytes));
+    buf.copy(next, 0, 0, off);
+    buf = next;
+  }
+}
+
+/** Write a known-ASCII string (escape sequences, digits). latin1 = 1 byte/char. */
+function writeAscii(s: string): void {
+  ensureCapacity(s.length);
+  off += buf.write(s, off, "latin1");
+}
+
+/** Write an arbitrary (possibly multi-byte) character string. */
+function writeStr(s: string): void {
+  const needed = Buffer.byteLength(s, "utf8");
+  ensureCapacity(needed);
+  off += buf.write(s, off, "utf8");
+}
+
+// ── Escape sequence helpers ─────────────────────────────────────
+
+function writeCursorMove(x: number, y: number): void {
+  writeAscii(`${CSI}${y + 1};${x + 1}H`);
 }
 
 function buildSGR(cell: Cell): string {
@@ -21,12 +52,15 @@ function buildSGR(cell: Cell): string {
   return seq;
 }
 
+// ── Public API ──────────────────────────────────────────────────
+
 export function diffFramebuffers(
   prev: Framebuffer,
   next: Framebuffer,
   fullRedraw: boolean,
 ): string {
-  let out = "";
+  off = 0; // Reset write cursor
+
   // cursorX/cursorY track the terminal's ACTUAL cursor position,
   // accounting for wide characters that advance the cursor by 2.
   let cursorX = -1;
@@ -48,10 +82,10 @@ export function diffFramebuffers(
     //     erase the logical line, leaving wrapped remnants.  \x1b[2J
     //     nukes everything unconditionally.
     //  4. Home cursor — ensure we start from (0,0).
-    out += `${CSI}?7l`; // Disable auto-wrap
-    out += `${CSI}r`;   // Reset scroll region
-    out += `${CSI}2J`;  // Clear entire screen
-    out += `${CSI}H`;   // Home cursor
+    writeAscii(`${CSI}?7l`); // Disable auto-wrap
+    writeAscii(`${CSI}r`);   // Reset scroll region
+    writeAscii(`${CSI}2J`);  // Clear entire screen
+    writeAscii(`${CSI}H`);   // Home cursor
     cursorX = 0;
     cursorY = 0;
   }
@@ -72,16 +106,16 @@ export function diffFramebuffers(
 
       // Move cursor if it isn't already at the right position
       if (cursorY !== y || cursorX !== x) {
-        out += moveCursor(x, y);
+        writeCursorMove(x, y);
       }
 
       const sgr = buildSGR(nc);
       if (sgr !== lastSGR) {
-        out += sgr;
+        writeAscii(sgr);
         lastSGR = sgr;
       }
 
-      out += nc.ch;
+      writeStr(nc.ch);
       // Advance cursor by the character's actual display width.
       // Wide characters (CJK, certain Unicode) move the cursor by 2.
       cursorX = x + ttyCharWidth(nc.ch);
@@ -89,15 +123,17 @@ export function diffFramebuffers(
     }
   }
 
-  if (out.length > 0) {
-    out += `${CSI}0m`;
+  if (off > 0) {
+    writeAscii(`${CSI}0m`);
   }
 
   if (fullRedraw) {
     // Re-enable auto-wrap so normal terminal behaviour is preserved
     // for anything outside our paint cycle (e.g. images, cursor input).
-    out += `${CSI}?7h`;
+    writeAscii(`${CSI}?7h`);
   }
 
-  return out;
+  // Return a string — no API change.  All escape sequences are pure
+  // ASCII so the mixed latin1/utf8 buffer is valid utf8 throughout.
+  return buf.toString("utf8", 0, off);
 }

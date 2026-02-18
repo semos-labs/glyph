@@ -377,91 +377,6 @@ function extractLayout(
   }
 }
 
-// ── Yoga ↔ GlyphNode tree sync ─────────────────────────────────
-// Structural changes (appendChild, removeChild, insertBefore) keep
-// the Yoga tree in sync with the GlyphNode tree.  However, certain
-// edge-cases in React's commit ordering can let the two diverge.
-// `ensureYogaTreeSync` walks the GlyphNode tree and *fixes* the
-// Yoga children list to match.  Called every frame before
-// calculateLayout so the WASM tree is always authoritative.
-
-function ensureYogaChildrenSync(node: GlyphNode): void {
-  const yn = node.yogaNode;
-  if (!yn) return;
-  // Text / input nodes are Yoga leaves — skip child sync.
-  if (node.type === "text" || node.type === "input") return;
-
-  // Expected Yoga children: every GlyphNode child that has a yogaNode.
-  const expectedChildren: GlyphNode[] = [];
-  for (const child of node.children) {
-    if (child.yogaNode) expectedChildren.push(child);
-  }
-
-  const yogaCount = yn.getChildCount();
-
-  // Fast path: check if already in sync (reference equality per index).
-  let inSync = yogaCount === expectedChildren.length;
-  if (inSync) {
-    for (let i = 0; i < yogaCount; i++) {
-      if (yn.getChild(i) !== expectedChildren[i]!.yogaNode) {
-        inSync = false;
-        break;
-      }
-    }
-  }
-
-  if (!inSync) {
-    // Rebuild: remove all Yoga children, re-insert in GlyphNode order.
-    while (yn.getChildCount() > 0) {
-      yn.removeChild(yn.getChild(0));
-    }
-    for (let i = 0; i < expectedChildren.length; i++) {
-      const childYoga = expectedChildren[i]!.yogaNode!;
-      // Detach from any stale Yoga parent first.
-      const prev = childYoga.getParent();
-      if (prev) prev.removeChild(childYoga);
-      yn.insertChild(childYoga, i);
-    }
-  }
-
-  // Recurse into children.
-  for (const child of expectedChildren) {
-    ensureYogaChildrenSync(child);
-  }
-}
-
-/** Walk all roots and fix any Yoga ↔ GlyphNode child-list mismatches. */
-function ensureYogaTreeSync(roots: GlyphNode[], rootYoga: YogaNode): void {
-  // Also verify root-level children.
-  const expectedRootChildren: GlyphNode[] = [];
-  for (const r of roots) {
-    if (r.yogaNode) expectedRootChildren.push(r);
-  }
-  const rootCount = rootYoga.getChildCount();
-  let rootInSync = rootCount === expectedRootChildren.length;
-  if (rootInSync) {
-    for (let i = 0; i < rootCount; i++) {
-      if (rootYoga.getChild(i) !== expectedRootChildren[i]!.yogaNode) {
-        rootInSync = false;
-        break;
-      }
-    }
-  }
-  if (!rootInSync) {
-    while (rootYoga.getChildCount() > 0) {
-      rootYoga.removeChild(rootYoga.getChild(0));
-    }
-    for (let i = 0; i < expectedRootChildren.length; i++) {
-      const childYoga = expectedRootChildren[i]!.yogaNode!;
-      const prev = childYoga.getParent();
-      if (prev) prev.removeChild(childYoga);
-      rootYoga.insertChild(childYoga, i);
-    }
-  }
-  for (const child of expectedRootChildren) {
-    ensureYogaChildrenSync(child);
-  }
-}
 
 // ── Public API ──────────────────────────────────────────────────
 
@@ -509,11 +424,6 @@ export function computeLayout(
   const t1 = performance.now();
   syncYogaStyles(roots);
   perf.syncYogaStyles = performance.now() - t1;
-
-  // 2b. Verify Yoga ↔ GlyphNode tree structure is in sync.
-  //     Fixes any mismatches caused by React commit-phase edge cases
-  //     (e.g. rapid create/delete cycles with unique keys).
-  ensureYogaTreeSync(roots, rootYoga);
 
   // 3. Update root dimensions and calculate layout
   const t2 = performance.now();

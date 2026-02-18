@@ -385,8 +385,9 @@ function ProcessTable({
   );
 }
 
-function ActivityLog({ logs }: { logs: LogEntry[] }) {
-  const visibleLines = 20; // approximate visible rows
+function ActivityLog({ logs, tick }: { logs: LogEntry[]; tick: number }) {
+  // Simple approach: just show the last N items, no ScrollView
+  const visible = logs.slice(-20);
   return (
     <Box style={{ flexDirection: "column", flexGrow: 1 }}>
       <Box style={{ paddingX: 1, bg: "blackBright" }}>
@@ -394,24 +395,18 @@ function ActivityLog({ logs }: { logs: LogEntry[] }) {
         <Spacer />
         <Text style={{ dim: true }}>{logs.length} entries</Text>
       </Box>
-      <ScrollView
-        style={{ flexGrow: 1, flexDirection: "column" }}
-        disableKeyboard
-        scrollOffset={Math.max(0, logs.length - visibleLines)}
-      >
-        {logs.map((log) => {
-          const levelColor =
-            log.level === "error" ? "red" : log.level === "warn" ? "yellow" : "blackBright";
-          return (
-            <Box key={log.id} style={{ flexDirection: "row", paddingX: 1, gap: 1 }}>
-              <Text style={{ color: levelColor, dim: log.level === "info" }}>
-                {log.time}
-              </Text>
-              <Text style={{ dim: log.level === "info" }}>{log.message}</Text>
-            </Box>
-          );
-        })}
-      </ScrollView>
+      {visible.map((log, i) => {
+        const levelColor =
+          log.level === "error" ? "red" : log.level === "warn" ? "yellow" : "blackBright";
+        return (
+          <Box key={i} style={{ flexDirection: "row", paddingX: 1, gap: 1 }}>
+            <Text style={{ color: levelColor, dim: log.level === "info" }}>
+              {log.time}
+            </Text>
+            <Text style={{ dim: log.level === "info" }}>{log.message}</Text>
+          </Box>
+        );
+      })}
     </Box>
   );
 }
@@ -539,7 +534,7 @@ function App() {
 
         {/* Activity log (right) */}
         <Box style={{ flexDirection: "column", width: 48, flexShrink: 0 }}>
-          <ActivityLog logs={logs} />
+          <ActivityLog logs={logs} tick={tick} />
         </Box>
       </Box>
 

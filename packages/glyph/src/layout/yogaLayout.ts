@@ -263,8 +263,17 @@ function extractLayout(
   const hasNew = yn.hasNewLayout();
 
   // Fast path: Yoga didn't recalculate this node AND parent didn't move.
-  // The entire subtree is guaranteed unchanged — skip it.
-  if (!hasNew && !parentMoved) return;
+  // This node's own layout is unchanged, but we must still recurse into
+  // children — an absolutely-positioned child (e.g. ScrollView's content
+  // wrapper) can have hasNewLayout() even when its parent doesn't.
+  if (!hasNew && !parentMoved) {
+    // Still check children for independent layout changes
+    for (const child of node.children) {
+      if (child.hidden || !child.yogaNode) continue;
+      extractLayout(child, node.layout!.x, node.layout!.y, false, clip);
+    }
+    return;
+  }
 
   if (hasNew) yn.markLayoutSeen();
 

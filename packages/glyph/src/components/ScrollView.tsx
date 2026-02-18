@@ -206,6 +206,13 @@ export function ScrollView({
   // Always clamp the effective offset used for rendering
   const effectiveOffset = Math.max(0, Math.min(offset, maxOffset));
 
+  // DEBUG: expose internal state on globalThis for debugging (keyed by controlled vs uncontrolled)
+  if (!(globalThis as any).__svDbg) (globalThis as any).__svDbg = {};
+  (globalThis as any).__svDbg[isControlled ? "ctrl" : "free"] = {
+    offset, viewportHeight, contentHeight, maxOffset, effectiveOffset,
+    ctLayoutH: contentLayout.height, vpLayoutH: viewportLayout.innerHeight,
+  };
+
   // Keep refs for lazy access in scrollTo (called outside render cycle)
   const offsetRef = useRef(effectiveOffset);
   offsetRef.current = effectiveOffset;
@@ -411,16 +418,26 @@ export function ScrollView({
   const intrinsicHeight = contentHeight > 0 ? contentHeight + borderHeight : undefined;
   
   // Outer viewport style:
-  // - If no explicit height set by user, use content height as intrinsic size
+  // - If no explicit height set by user AND no flexGrow, use content height
+  //   as intrinsic size so the ScrollView naturally sizes to its content.
+  // - When flexGrow is set, the parent flex container sizes the ScrollView,
+  //   so we must NOT impose height: contentHeight — that would make the
+  //   viewport as tall as the content, collapsing maxOffset to 0 and
+  //   preventing any scrolling.  (Yoga's default flexShrink is 0, so
+  //   ancestor boxes that don't set flexShrink can't absorb the overflow.)
   // - flexShrink: 1 allows shrinking when parent constrains (e.g., maxHeight)
   // - minHeight: 0 allows shrinking to any size
   // - clip: true enables content clipping for scrolling
+  const useIntrinsicHeight =
+    styleRest.height === undefined &&
+    intrinsicHeight !== undefined &&
+    !styleRest.flexGrow;            // flexGrow → parent sizes us
+
   const outerStyle: Style = {
     ...styleRest,
     ...(isSelfFocused ? focusedStyle : {}),
     clip: true,
-    // Only set intrinsic height if user didn't set explicit height
-    ...(styleRest.height === undefined && intrinsicHeight !== undefined
+    ...(useIntrinsicHeight
       ? {
           height: intrinsicHeight,
           flexShrink: styleRest.flexShrink ?? 1,

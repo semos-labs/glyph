@@ -16,7 +16,7 @@ function computeWithRoot(roots: GlyphNode[], cols: number, rows: number) {
       rootYoga.insertChild(root.yogaNode, rootYoga.getChildCount());
     }
   }
-  computeLayout(roots, cols, rows, rootYoga);
+  computeLayout(roots, cols, rows, rootYoga, true);
   // Detach children before freeing so persistent GlyphNode.yogaNodes survive
   while (rootYoga.getChildCount() > 0) {
     rootYoga.removeChild(rootYoga.getChild(0));

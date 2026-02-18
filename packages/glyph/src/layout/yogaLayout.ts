@@ -11,6 +11,7 @@ import Yoga, {
 } from "yoga-layout";
 import type { Node as YogaNode } from "yoga-layout";
 import type { GlyphNode } from "../reconciler/nodes.js";
+import { isLayoutDirty, resetLayoutDirty } from "../reconciler/nodes.js";
 import type { ResolvedStyle, DimensionValue } from "../types/index.js";
 import { measureText } from "./textMeasure.js";
 import { resolveNodeStyles } from "./responsive.js";
@@ -153,7 +154,8 @@ function collectAllText(node: GlyphNode): string {
  * Walk the tree and sync styles + measure functions.  No structural
  * changes — the reconciler keeps the Yoga tree in sync.
  */
-function syncYogaStyles(nodes: GlyphNode[]): void {
+function syncYogaStyles(nodes: GlyphNode[]): boolean {
+  let anyChanged = false;
   for (const node of nodes) {
     if (node.hidden || !node.yogaNode) continue;
 
@@ -161,6 +163,7 @@ function syncYogaStyles(nodes: GlyphNode[]): void {
     if (node.resolvedStyle !== node._lastYogaStyle) {
       applyStyleToYogaNode(node.yogaNode, node.resolvedStyle, node.type);
       node._lastYogaStyle = node.resolvedStyle;
+      anyChanged = true;
     }
 
     // Install measure function once for text/input leaf nodes
@@ -181,13 +184,15 @@ function syncYogaStyles(nodes: GlyphNode[]): void {
         );
       });
       node._hasMeasureFunc = true;
+      anyChanged = true;
     }
 
     // Recurse into children
     if (node.type !== "text" && node.type !== "input") {
-      syncYogaStyles(node.children);
+      if (syncYogaStyles(node.children)) anyChanged = true;
     }
   }
+  return anyChanged;
 }
 
 function extractLayout(node: GlyphNode, parentX: number, parentY: number): void {
@@ -242,13 +247,27 @@ export function createRootYogaNode(): YogaNode {
  * @param screenWidth - Terminal width in columns.
  * @param screenHeight - Terminal height in rows.
  * @param rootYoga - Persistent root Yoga node (screen container).
+ * @param force - Force recalculation (e.g. on resize).
+ * @returns `true` if Yoga `calculateLayout` actually ran.
  */
 export function computeLayout(
   roots: GlyphNode[],
   screenWidth: number,
   screenHeight: number,
   rootYoga: YogaNode,
-): void {
+  force = false,
+): boolean {
+  // Fast path: nothing could have changed — skip all tree walks.
+  // Safe because:
+  //  • resize / init  → force = true
+  //  • style change   → markLayoutDirty() from commitUpdate
+  //  • text measure   → markLayoutDirty() from commitTextUpdate
+  //  • structural     → force = true (via fullRepaint)
+  //  • new nodes      → force = true (structural change)
+  if (!force && !isLayoutDirty()) {
+    return false;
+  }
+
   // 1. Resolve responsive style values for the current terminal dimensions
   resolveNodeStyles(roots, screenWidth, screenHeight);
 
@@ -265,4 +284,7 @@ export function computeLayout(
     if (child.hidden || !child.yogaNode) continue;
     extractLayout(child, 0, 0);
   }
+
+  resetLayoutDirty();
+  return true;
 }

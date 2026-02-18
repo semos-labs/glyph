@@ -30,6 +30,8 @@ export interface GlyphNode {
   _lastYogaStyle: ResolvedStyle | null;
   /** @internal Whether a Yoga measure function has been installed on this node. */
   _hasMeasureFunc: boolean;
+  /** @internal Whether this node's visual content changed since the last paint. */
+  _paintDirty: boolean;
 }
 
 export interface GlyphTextInstance {
@@ -43,6 +45,26 @@ export interface GlyphContainer {
   children: GlyphNode[];
   onCommit: () => void;
   yogaNode?: YogaNode;
+}
+
+// ── Shared empty style (avoids creating new {} on every commitUpdate) ──
+export const EMPTY_STYLE: Style = Object.freeze({}) as Style;
+
+// ── Layout dirty tracking ───────────────────────────────────────
+// Tracks whether Yoga calculateLayout needs to run.
+let _layoutDirty = true;
+export function markLayoutDirty(): void { _layoutDirty = true; }
+export function isLayoutDirty(): boolean { return _layoutDirty; }
+export function resetLayoutDirty(): void { _layoutDirty = false; }
+
+// ── Structural change tracking ──────────────────────────────────
+// Structural changes (add/remove/move nodes) require full repaint.
+let _structuralChange = false;
+export function markStructuralChange(): void { _structuralChange = true; }
+export function consumeStructuralChange(): boolean {
+  const v = _structuralChange;
+  _structuralChange = false;
+  return v;
 }
 
 let nextFocusId = 0;
@@ -73,6 +95,7 @@ export function createGlyphNode(
     _lastStyleRef: null,
     _lastYogaStyle: null,
     _hasMeasureFunc: false,
+    _paintDirty: true,
   };
 }
 
@@ -88,6 +111,8 @@ export function appendChild(parent: GlyphNode, child: GlyphNode): void {
   parent.allChildren.push(child);
 
   yogaAppendChild(parent, child);
+  markLayoutDirty();
+  markStructuralChange();
 }
 
 export function appendTextChild(parent: GlyphNode, child: GlyphTextInstance): void {
@@ -105,6 +130,8 @@ export function appendTextChild(parent: GlyphNode, child: GlyphTextInstance): vo
 
 export function removeChild(parent: GlyphNode, child: GlyphNode): void {
   yogaRemoveChild(parent, child);
+  markLayoutDirty();
+  markStructuralChange();
 
   const idx = parent.children.indexOf(child);
   if (idx !== -1) {
@@ -153,6 +180,8 @@ export function insertBefore(
   }
 
   yogaInsertBefore(parent, child, beforeChild);
+  markLayoutDirty();
+  markStructuralChange();
 }
 
 export function insertTextBefore(

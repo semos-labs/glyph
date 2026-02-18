@@ -9,6 +9,7 @@ import { Framebuffer } from "./paint/framebuffer.js";
 import { paintTree } from "./paint/painter.js";
 import { diffFramebuffers } from "./paint/diff.js";
 import { computeLayout, createRootYogaNode } from "./layout/yogaLayout.js";
+import { consumeStructuralChange } from "./reconciler/nodes.js";
 import { setTerminalPalette, getContrastCursorColor } from "./paint/color.js";
 import {
   InputContext,
@@ -407,10 +408,21 @@ export function render(
         fullRedraw = true;
       }
 
+      // fullRedraw = clear terminal screen (resize / init only)
+      // fullRepaint = repaint all nodes (structural change / layout change)
+      let fullRepaint = fullRedraw;
+
+      if (consumeStructuralChange()) {
+        fullRepaint = true;
+      }
+
       // ── Phase 1: Layout ──
       const tLayout0 = performance.now();
-      computeLayout(container.children, cols, rows, rootYogaNode);
-      notifyLayoutSubscribers(container.children);
+      const layoutChanged = computeLayout(container.children, cols, rows, rootYogaNode, fullRepaint);
+      if (layoutChanged) {
+        notifyLayoutSubscribers(container.children);
+        fullRepaint = true;
+      }
       const tLayout1 = performance.now();
 
       // Find cursor info for focused input
@@ -430,6 +442,7 @@ export function render(
       const paintResult = paintTree(container.children, currentFb, {
         cursorInfo,
         useNativeCursor,
+        fullRedraw: fullRepaint,
       });
       const tPaint1 = performance.now();
 

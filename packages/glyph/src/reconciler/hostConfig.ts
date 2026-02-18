@@ -16,6 +16,9 @@ import {
   insertTextBefore as glyphInsertTextBefore,
   freeYogaNode,
   yogaAppendChild,
+  EMPTY_STYLE,
+  markLayoutDirty,
+  markStructuralChange,
 } from "./nodes.js";
 import type { Style } from "../types/index.js";
 
@@ -177,6 +180,8 @@ export const hostConfig = {
     const node = child as GlyphNode;
     node.parent = null;
     container.children.push(node);
+    markLayoutDirty();
+    markStructuralChange();
     // Sync Yoga tree: add to root Yoga node
     if (container.yogaNode && node.yogaNode) {
       const prev = node.yogaNode.getParent();
@@ -285,9 +290,11 @@ export const hostConfig = {
       textInstance.parent.text = textInstance.parent.rawTextChildren
         .map((t) => t.text)
         .join("");
-      // Mark parent's Yoga node dirty for re-measurement
-      if (textInstance.parent.yogaNode) {
+      textInstance.parent._paintDirty = true;
+      // Only mark Yoga dirty when text length changes (measurement may differ)
+      if (textInstance.parent.yogaNode && _oldText.length !== newText.length) {
         textInstance.parent.yogaNode.markDirty();
+        markLayoutDirty();
       }
     }
   },
@@ -302,7 +309,15 @@ export const hostConfig = {
     _internalHandle: any,
   ): void {
     instance.props = newProps;
-    instance.style = (newProps.style as Style) ?? {};
+    instance._paintDirty = true;
+
+    // Only update style ref when it actually changes (avoids Phase 1 cache bust)
+    const newStyle = (newProps.style as Style | undefined) ?? EMPTY_STYLE;
+    if (newStyle !== instance.style) {
+      instance.style = newStyle;
+      markLayoutDirty();
+    }
+
     if (newProps.focusable && !instance.focusId) {
       instance.focusId = `focus-${Math.random().toString(36).slice(2, 9)}`;
     }
@@ -310,6 +325,7 @@ export const hostConfig = {
     if (instance.yogaNode && instance.type === "input") {
       if (_oldProps.value !== newProps.value || _oldProps.placeholder !== newProps.placeholder) {
         instance.yogaNode.markDirty();
+        markLayoutDirty();
       }
     }
   },
@@ -317,6 +333,8 @@ export const hostConfig = {
   hideInstance(instance: GlyphNode): void {
     instance.hidden = true;
     if (instance.yogaNode) instance.yogaNode.setDisplay(Display.None);
+    markLayoutDirty();
+    markStructuralChange();
   },
 
   hideTextInstance(textInstance: GlyphTextInstance): void {
@@ -326,6 +344,8 @@ export const hostConfig = {
   unhideInstance(instance: GlyphNode, _props: Props): void {
     instance.hidden = false;
     if (instance.yogaNode) instance.yogaNode.setDisplay(Display.Flex);
+    markLayoutDirty();
+    markStructuralChange();
   },
 
   unhideTextInstance(textInstance: GlyphTextInstance, text: string): void {

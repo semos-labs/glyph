@@ -33,6 +33,8 @@ export interface PaintOptions {
   cursorInfo?: { nodeId: string; position: number };
   /** If true, don't paint the cursor and return its screen position instead */
   useNativeCursor?: boolean;
+  /** If true, clear framebuffer and paint everything. If false, only paint dirty nodes. */
+  fullRedraw?: boolean;
 }
 
 export interface PaintResult {
@@ -45,7 +47,11 @@ export function paintTree(
   fb: Framebuffer,
   options: PaintOptions = {},
 ): PaintResult {
-  fb.clear();
+  const full = options.fullRedraw ?? true;
+
+  if (full) {
+    fb.clear();
+  }
 
   const result: PaintResult = {};
 
@@ -63,7 +69,28 @@ export function paintTree(
 
   // Paint each entry
   for (const entry of entries) {
-    const nodeResult = paintNode(entry.node, fb, entry.clip, options);
+    const node = entry.node;
+
+    // On incremental frames, skip nodes whose content hasn't changed
+    if (!full && !node._paintDirty) continue;
+
+    // On incremental frames, clear text/input inner area first
+    // (old characters past the end of new text would otherwise linger)
+    if (!full && (node.type === "text" || node.type === "input")) {
+      const { innerX, innerY, innerWidth, innerHeight } = node.layout;
+      const inherited = getInheritedTextStyle(node);
+      for (let row = innerY; row < innerY + innerHeight; row++) {
+        for (let col = innerX; col < innerX + innerWidth; col++) {
+          if (isInClip(col, row, entry.clip)) {
+            fb.setChar(col, row, " ", undefined, inherited.bg);
+          }
+        }
+      }
+    }
+
+    const nodeResult = paintNode(node, fb, entry.clip, options);
+    node._paintDirty = false;
+
     // Capture cursor position from the focused input
     if (nodeResult?.cursorPosition) {
       result.cursorPosition = nodeResult.cursorPosition;

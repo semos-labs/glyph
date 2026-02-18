@@ -1,8 +1,9 @@
 name: Publish to npm
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v*"
 
 jobs:
   publish:
@@ -25,10 +26,20 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          # Get tag name (e.g., v0.1.0) and strip the 'v' prefix
+          # Get tag name (e.g., v0.1.7 or v0.1.7-rc1) and strip the 'v' prefix
           VERSION=${GITHUB_REF_NAME#v}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Publishing version: $VERSION"
+
+          # Detect if this is an RC release
+          if [[ "$VERSION" == *-rc* ]]; then
+            echo "is_rc=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=rc" >> $GITHUB_OUTPUT
+            echo "Publishing RC version: $VERSION (tag: rc)"
+          else
+            echo "is_rc=false" >> $GITHUB_OUTPUT
+            echo "npm_tag=latest" >> $GITHUB_OUTPUT
+            echo "Publishing stable version: $VERSION (tag: latest)"
+          fi
 
       - name: Update package versions
         run: |
@@ -58,13 +69,13 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Publish glyph
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag ${{ steps.version.outputs.npm_tag }}
         working-directory: packages/glyph
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish create-glyph
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag ${{ steps.version.outputs.npm_tag }}
         working-directory: packages/create-glyph
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

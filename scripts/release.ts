@@ -3,9 +3,17 @@
  * Release script for Glyph
  *
  * Usage:
- *   bun release           # Bump patch version (0.0.1 -> 0.0.2)
- *   bun release --minor   # Bump minor version (0.0.1 -> 0.1.0)
- *   bun release --major   # Bump major version (0.0.1 -> 1.0.0)
+ *   bun release                # Bump patch version (0.1.6 → 0.1.7)
+ *   bun release --minor        # Bump minor version (0.1.6 → 0.2.0)
+ *   bun release --major        # Bump major version (0.1.6 → 1.0.0)
+ *   bun release --rc           # Bump patch + RC    (0.1.6 → 0.1.7-rc1)
+ *   bun release --minor --rc   # Bump minor + RC    (0.1.6 → 0.2.0-rc1)
+ *   bun release --major --rc   # Bump major + RC    (0.1.6 → 1.0.0-rc1)
+ *
+ * RC rules:
+ *   - First --rc after a stable release bumps the version and appends -rc1
+ *   - Subsequent --rc bumps the RC number (rc1 → rc2 → rc3 ...)
+ *   - Running without --rc after an RC finalises the version (removes -rcN)
  */
 
 import { $ } from "bun";
@@ -27,6 +35,34 @@ function ok(msg: string) { console.log(`  ${green("✓")} ${msg}`); }
 function fail(msg: string) { console.error(`  ${red("✗")} ${msg}`); }
 function warn(msg: string) { console.log(`  ${yellow("⚠")} ${msg}`); }
 
+interface ParsedVersion {
+  major: number;
+  minor: number;
+  patch: number;
+  rc: number | null; // null = stable, 1+ = rc number
+}
+
+function parseVersion(tag: string): ParsedVersion | null {
+  // Match v1.2.3 or v1.2.3-rc4
+  const m = tag.match(/^v?(\d+)\.(\d+)\.(\d+)(?:-rc(\d+))?$/);
+  if (!m) return null;
+  return {
+    major: Number(m[1]),
+    minor: Number(m[2]),
+    patch: Number(m[3]),
+    rc: m[4] != null ? Number(m[4]) : null,
+  };
+}
+
+function formatVersion(v: ParsedVersion): string {
+  const base = `${v.major}.${v.minor}.${v.patch}`;
+  return v.rc != null ? `${base}-rc${v.rc}` : base;
+}
+
+function formatTag(v: ParsedVersion): string {
+  return `v${formatVersion(v)}`;
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
@@ -36,9 +72,17 @@ if (args.includes("-h") || args.includes("--help")) {
   console.log(`  ${bold("release")} ${dim("— tag & publish a new Glyph version")}`);
   console.log();
   console.log(`  ${bold("Usage:")}`);
-  console.log(`    ${cyan("bun release")}           ${dim("patch bump  (0.0.1 → 0.0.2)")}`);
-  console.log(`    ${cyan("bun release --minor")}   ${dim("minor bump  (0.0.1 → 0.1.0)")}`);
-  console.log(`    ${cyan("bun release --major")}   ${dim("major bump  (0.0.1 → 1.0.0)")}`);
+  console.log(`    ${cyan("bun release")}                ${dim("patch bump  (0.1.6 → 0.1.7)")}`);
+  console.log(`    ${cyan("bun release --minor")}        ${dim("minor bump  (0.1.6 → 0.2.0)")}`);
+  console.log(`    ${cyan("bun release --major")}        ${dim("major bump  (0.1.6 → 1.0.0)")}`);
+  console.log(`    ${cyan("bun release --rc")}           ${dim("patch RC    (0.1.6 → 0.1.7-rc1)")}`);
+  console.log(`    ${cyan("bun release --minor --rc")}   ${dim("minor RC    (0.1.6 → 0.2.0-rc1)")}`);
+  console.log(`    ${cyan("bun release --major --rc")}   ${dim("major RC    (0.1.6 → 1.0.0-rc1)")}`);
+  console.log();
+  console.log(`  ${bold("RC rules:")}`);
+  console.log(`    ${dim("First --rc after a stable release bumps version + appends -rc1")}`);
+  console.log(`    ${dim("Subsequent --rc bumps the RC number (rc1 → rc2 → rc3 …)")}`);
+  console.log(`    ${dim("Without --rc after an RC → finalises the version (drops -rcN)")}`);
   console.log();
   process.exit(0);
 }
@@ -46,6 +90,8 @@ if (args.includes("-h") || args.includes("--help")) {
 const bumpType = args.includes("--major") ? "major"
   : args.includes("--minor") ? "minor"
   : "patch";
+
+const isRC = args.includes("--rc");
 
 async function main() {
   console.log();
@@ -59,36 +105,60 @@ async function main() {
     process.exit(1);
   }
 
-  // 2. Resolve current version from latest tag
+  // 2. Resolve current version from latest tag (including RC tags)
   let latestTag: string;
   try {
-    latestTag = (await $`git describe --tags --abbrev=0`.text()).trim();
+    latestTag = (await $`git describe --tags --abbrev=0 --match "v*"`.text()).trim();
   } catch {
     latestTag = "v0.0.0";
   }
 
-  const m = latestTag.match(/^v?(\d+)\.(\d+)\.(\d+)$/);
-  if (!m) {
+  const current = parseVersion(latestTag);
+  if (!current) {
     fail(`Invalid tag format: ${bold(latestTag)}`);
     console.log();
     process.exit(1);
   }
 
-  let [, major, minor, patch] = m.map(Number);
+  // 3. Compute next version
+  const next: ParsedVersion = { ...current };
 
-  switch (bumpType) {
-    case "major": major!++; minor = 0; patch = 0; break;
-    case "minor": minor!++; patch = 0; break;
-    case "patch": patch!++; break;
+  if (isRC) {
+    if (current.rc != null) {
+      // Already on an RC — just bump the RC number
+      // (ignore bumpType, we're continuing the same RC series)
+      next.rc = current.rc + 1;
+    } else {
+      // Stable → first RC: bump the requested semver component, then -rc1
+      switch (bumpType) {
+        case "major": next.major++; next.minor = 0; next.patch = 0; break;
+        case "minor": next.minor++; next.patch = 0; break;
+        case "patch": next.patch++; break;
+      }
+      next.rc = 1;
+    }
+  } else {
+    if (current.rc != null) {
+      // Finalising an RC series → same version, drop -rcN
+      next.rc = null;
+    } else {
+      // Stable → stable: normal bump
+      switch (bumpType) {
+        case "major": next.major++; next.minor = 0; next.patch = 0; break;
+        case "minor": next.minor++; next.patch = 0; break;
+        case "patch": next.patch++; break;
+      }
+    }
   }
 
-  const version = `${major}.${minor}.${patch}`;
-  const tag = `v${version}`;
+  const version = formatVersion(next);
+  const tag = formatTag(next);
+  const label = isRC ? "release candidate" : bumpType;
 
-  console.log(`  ${bold(latestTag)} ${dim("→")} ${bold(cyan(tag))} ${dim(`(${bumpType})`)}`);
+  console.log(`  ${bold(latestTag)} ${dim("→")} ${bold(cyan(tag))} ${dim(`(${label})`)}`);
   console.log();
 
-  // 3. Update package.json files
+  // 4. Update package.json files
   const packagePaths = [
     "./packages/glyph/package.json",
     "./packages/create-glyph/package.json",
@@ -101,7 +171,7 @@ async function main() {
   }
   ok("Updated package versions");
 
-  // 4. Commit version bump
+  // 5. Commit version bump
   for (const pkgPath of packagePaths) {
     await $`git add ${pkgPath}`;
   }
@@ -113,22 +183,29 @@ async function main() {
     ok("Versions already up to date");
   }
 
-  // 5. Tag
+  // 6. Tag
   await $`git tag -a ${tag} -m ${"Release " + tag}`;
   ok(`Tagged ${bold(tag)}`);
 
-  // 6. Push
+  // 7. Push
   await $`git push origin main`.quiet();
   await $`git push origin ${tag}`.quiet();
   ok("Pushed to origin");
 
-  // 7. GitHub release
-  const gh = await $`gh release create ${tag} --generate-notes --title ${tag}`.quiet();
+  // 8. GitHub release (draft for RCs, published for stable)
+  const ghArgs = isRC
+    ? $`gh release create ${tag} --generate-notes --title ${tag} --draft --prerelease`
+    : $`gh release create ${tag} --generate-notes --title ${tag}`;
+
+  const gh = await ghArgs.quiet();
   if (gh.exitCode === 0) {
-    ok("Created GitHub release");
+    ok(`Created GitHub release${isRC ? " (draft, prerelease)" : ""}`);
   } else {
+    const cmd = isRC
+      ? `gh release create ${tag} --generate-notes --title ${tag} --draft --prerelease`
+      : `gh release create ${tag} --generate-notes --title ${tag}`;
     warn(`Could not create GitHub release — run manually:`);
-    console.log(`      ${cyan(`gh release create ${tag} --generate-notes --title ${tag}`)}`);
+    console.log(`      ${cyan(cmd)}`);
   }
 
   console.log();

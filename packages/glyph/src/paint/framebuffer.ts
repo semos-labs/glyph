@@ -19,21 +19,41 @@ export class Framebuffer {
   constructor(width: number, height: number) {
     this.width = width;
     this.height = height;
-    this.cells = new Array(width * height);
-    this.clear();
+    this.cells = Framebuffer.allocCells(width * height);
   }
 
+  /** Create the initial cell array — the ONLY place new Cell objects are born. */
+  private static allocCells(count: number): Cell[] {
+    const cells = new Array<Cell>(count);
+    for (let i = 0; i < count; i++) {
+      cells[i] = { ch: " ", fg: undefined, bg: undefined, bold: false, dim: false, italic: false, underline: false };
+    }
+    return cells;
+  }
+
+  /** Reset every cell to a blank space — mutates in place, zero allocations. */
   clear(): void {
     for (let i = 0; i < this.cells.length; i++) {
-      this.cells[i] = { ch: " " };
+      const c = this.cells[i]!;
+      c.ch = " ";
+      c.fg = undefined;
+      c.bg = undefined;
+      c.bold = false;
+      c.dim = false;
+      c.italic = false;
+      c.underline = false;
     }
   }
 
   resize(width: number, height: number): void {
+    const needed = width * height;
     this.width = width;
     this.height = height;
-    this.cells = new Array(width * height);
-    this.clear();
+    if (this.cells.length !== needed) {
+      this.cells = Framebuffer.allocCells(needed);
+    } else {
+      this.clear();
+    }
   }
 
   get(x: number, y: number): Cell | undefined {
@@ -43,7 +63,14 @@ export class Framebuffer {
 
   set(x: number, y: number, cell: Cell): void {
     if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
-    this.cells[y * this.width + x] = cell;
+    const c = this.cells[y * this.width + x]!;
+    c.ch = cell.ch;
+    c.fg = cell.fg;
+    c.bg = cell.bg;
+    c.bold = cell.bold ?? false;
+    c.dim = cell.dim ?? false;
+    c.italic = cell.italic ?? false;
+    c.underline = cell.underline ?? false;
   }
 
   setChar(
@@ -58,7 +85,14 @@ export class Framebuffer {
     underline?: boolean,
   ): void {
     if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
-    this.cells[y * this.width + x] = { ch, fg, bg, bold, dim, italic, underline };
+    const c = this.cells[y * this.width + x]!;
+    c.ch = ch;
+    c.fg = fg;
+    c.bg = bg;
+    c.bold = bold ?? false;
+    c.dim = dim ?? false;
+    c.italic = italic ?? false;
+    c.underline = underline ?? false;
   }
 
   fillRect(
@@ -77,12 +111,28 @@ export class Framebuffer {
     }
   }
 
+  /** Copy all cell data from `src` into this framebuffer. Zero allocations. */
+  copyFrom(src: Framebuffer): void {
+    if (this.width !== src.width || this.height !== src.height) {
+      this.resize(src.width, src.height);
+    }
+    const len = this.cells.length;
+    for (let i = 0; i < len; i++) {
+      const s = src.cells[i]!;
+      const d = this.cells[i]!;
+      d.ch = s.ch;
+      d.fg = s.fg;
+      d.bg = s.bg;
+      d.bold = s.bold;
+      d.dim = s.dim;
+      d.italic = s.italic;
+      d.underline = s.underline;
+    }
+  }
+
   clone(): Framebuffer {
     const fb = new Framebuffer(this.width, this.height);
-    for (let i = 0; i < this.cells.length; i++) {
-      const c = this.cells[i]!;
-      fb.cells[i] = { ...c };
-    }
+    fb.copyFrom(this);
     return fb;
   }
 

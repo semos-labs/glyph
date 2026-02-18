@@ -464,9 +464,7 @@ export function render(
 
       // ── Phase 4: Swap buffers ──
       const tSwap0 = performance.now();
-      for (let i = 0; i < currentFb.cells.length; i++) {
-        prevFb.cells[i] = { ...currentFb.cells[i]! };
-      }
+      prevFb.copyFrom(currentFb);
       const tSwap1 = performance.now();
 
       fullRedraw = false;

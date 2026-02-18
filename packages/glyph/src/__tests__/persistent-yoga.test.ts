@@ -258,4 +258,63 @@ describe("persistent Yoga tree — dynamic content", () => {
 
     rootYoga.freeRecursive();
   });
+
+  test("sliding window: delete from start + add to end (unique-key pattern)", () => {
+    // This is the exact pattern that triggers the bug when using
+    // key={log.id} in a list that trims old entries via slice(-N).
+    // React deletes old nodes from the start and creates new ones at the end.
+    const rootYoga = createRootYogaNode();
+
+    const WINDOW = 10; // keep 10 items visible
+    const TOTAL = 60; // add 60 items total
+
+    const col = makeNode("box", { flexDirection: "column", width: 80, height: 24 });
+    rootYoga.insertChild(col.yogaNode!, 0);
+
+    // Track live rows by their "key" (id)
+    const liveRows = new Map<number, { row: GlyphNode; t1: GlyphNode; t2: GlyphNode }>();
+
+    for (let id = 0; id < TOTAL; id++) {
+      // Create a new row (simulates createInstance + appendInitialChild)
+      const row = makeNode("box", { flexDirection: "row", gap: 1 });
+      const { node: t1 } = makeText(`${id}`, { width: 4 });
+      const { node: t2 } = makeText(`Message-${id}`, {});
+      appendChild(row, t1);
+      appendChild(row, t2);
+
+      // Append to parent (simulates commitPlacement → appendChild)
+      appendChild(col, row);
+      liveRows.set(id, { row, t1, t2 });
+
+      // Trim: remove oldest if over window size
+      // (simulates React reconciling after slice(-WINDOW))
+      if (liveRows.size > WINDOW) {
+        const oldestId = id - WINDOW;
+        const old = liveRows.get(oldestId)!;
+        // removeChild detaches from Yoga tree + frees subtree synchronously
+        removeChild(col, old.row);
+        // detachDeletedInstance would call freeYogaNode — now a no-op
+        freeYogaNode(old.row);
+        freeYogaNode(old.t1);
+        freeYogaNode(old.t2);
+        liveRows.delete(oldestId);
+      }
+
+      // Compute layout every frame
+      layout([col], 80, 24, rootYoga);
+
+      // Verify: first live row should be at y=0, subsequent rows at y=1,2,...
+      const ids = [...liveRows.keys()].sort((a, b) => a - b);
+      for (let j = 0; j < ids.length; j++) {
+        const entry = liveRows.get(ids[j]!)!;
+        expect(entry.row.layout.y).toBe(j);
+        expect(entry.row.layout.height).toBe(1);
+      }
+
+      // Also verify parent Yoga child count matches GlyphNode child count
+      expect(col.yogaNode!.getChildCount()).toBe(col.children.length);
+    }
+
+    rootYoga.freeRecursive();
+  });
 });

@@ -399,7 +399,7 @@ function ActivityLog({ logs, tick }: { logs: LogEntry[]; tick: number }) {
         const levelColor =
           log.level === "error" ? "red" : log.level === "warn" ? "yellow" : "blackBright";
         return (
-          <Box key={i} style={{ flexDirection: "row", paddingX: 1, gap: 1 }}>
+          <Box key={log.id} style={{ flexDirection: "row", paddingX: 1, gap: 1 }}>
             <Text style={{ color: levelColor, dim: log.level === "info" }}>
               {log.time}
             </Text>

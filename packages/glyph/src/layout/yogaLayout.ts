@@ -261,11 +261,7 @@ function extractLayout(
   const hasNew = yn.hasNewLayout();
 
   // Fast path: Yoga didn't recalculate this node AND parent didn't move.
-  // This node's own layout is unchanged, but we must still recurse into
-  // children — an absolutely-positioned child (e.g. ScrollView's content
-  // wrapper) can have hasNewLayout() even when its parent doesn't.
   if (!hasNew && !parentMoved) {
-    // Still check children for independent layout changes
     for (const child of node.children) {
       if (child.hidden || !child.yogaNode) continue;
       extractLayout(child, node.layout!.x, node.layout!.y, false, clip);
@@ -275,7 +271,7 @@ function extractLayout(
 
   if (hasNew) yn.markLayoutSeen();
 
-  // ── Step 1: Determine absolute position (cheap: 1 WASM call or arithmetic) ──
+  // ── Step 1: Determine absolute position ──
   let x: number, y: number, width: number, height: number;
 
   if (hasNew) {
@@ -294,15 +290,10 @@ function extractLayout(
     height = prev.height;
   }
 
-  // ── Step 2: Clip cull — skip off-screen nodes entirely ──
-  // Avoids expensive padding WASM reads + child recursion for invisible nodes.
-  // IMPORTANT: we still update node.layout to the correct off-screen position
-  // so that collectPaintEntries correctly culls the node (stale on-screen
-  // positions would cause ghost painting).
+  // ── Step 2: Clip cull ──
   if (clip &&
       (y + height <= clip.minY || y >= clip.maxY ||
        x + width  <= clip.minX || x >= clip.maxX)) {
-    // Update position so the paint system sees the correct off-screen coords
     const prev = node.layout;
     if (prev && (prev.x !== x || prev.y !== y || prev.width !== width || prev.height !== height)) {
       const dx = x - prev.x;
@@ -317,7 +308,6 @@ function extractLayout(
       };
       node._paintDirty = true;
     }
-    // Off-screen: mark descendants as seen so Yoga resets its flags
     if (hasNew) markSubtreeLayoutSeen(node);
     return;
   }
@@ -349,7 +339,6 @@ function extractLayout(
       layoutChanged = true;
     }
   } else {
-    // Parent moved, node's relative layout unchanged — shift by delta.
     const prev = node.layout!;
     const dx = x - prev.x;
     const dy = y - prev.y;
@@ -374,10 +363,6 @@ function extractLayout(
   if (node.resolvedStyle.clip && node.layout) {
     const l = node.layout;
     const nc: LayoutClip = { minX: l.x, minY: l.y, maxX: l.x + l.width, maxY: l.y + l.height };
-    // Only apply clip when the rect has positive area.  A degenerate
-    // (0-area) clip culls *everything* and breaks layout feedback loops
-    // — e.g. ScrollView's useLayout bootstrap where the viewport starts
-    // at 0 height and needs child layout to size itself.
     if (nc.maxX > nc.minX && nc.maxY > nc.minY) {
       childClip = clip
         ? { minX: Math.max(clip.minX, nc.minX), minY: Math.max(clip.minY, nc.minY),
@@ -389,6 +374,92 @@ function extractLayout(
   for (const child of node.children) {
     if (child.hidden || !child.yogaNode) continue;
     extractLayout(child, node.layout!.x, node.layout!.y, layoutChanged, childClip);
+  }
+}
+
+// ── Yoga ↔ GlyphNode tree sync ─────────────────────────────────
+// Structural changes (appendChild, removeChild, insertBefore) keep
+// the Yoga tree in sync with the GlyphNode tree.  However, certain
+// edge-cases in React's commit ordering can let the two diverge.
+// `ensureYogaTreeSync` walks the GlyphNode tree and *fixes* the
+// Yoga children list to match.  Called every frame before
+// calculateLayout so the WASM tree is always authoritative.
+
+function ensureYogaChildrenSync(node: GlyphNode): void {
+  const yn = node.yogaNode;
+  if (!yn) return;
+  // Text / input nodes are Yoga leaves — skip child sync.
+  if (node.type === "text" || node.type === "input") return;
+
+  // Expected Yoga children: every GlyphNode child that has a yogaNode.
+  const expectedChildren: GlyphNode[] = [];
+  for (const child of node.children) {
+    if (child.yogaNode) expectedChildren.push(child);
+  }
+
+  const yogaCount = yn.getChildCount();
+
+  // Fast path: check if already in sync (reference equality per index).
+  let inSync = yogaCount === expectedChildren.length;
+  if (inSync) {
+    for (let i = 0; i < yogaCount; i++) {
+      if (yn.getChild(i) !== expectedChildren[i]!.yogaNode) {
+        inSync = false;
+        break;
+      }
+    }
+  }
+
+  if (!inSync) {
+    // Rebuild: remove all Yoga children, re-insert in GlyphNode order.
+    while (yn.getChildCount() > 0) {
+      yn.removeChild(yn.getChild(0));
+    }
+    for (let i = 0; i < expectedChildren.length; i++) {
+      const childYoga = expectedChildren[i]!.yogaNode!;
+      // Detach from any stale Yoga parent first.
+      const prev = childYoga.getParent();
+      if (prev) prev.removeChild(childYoga);
+      yn.insertChild(childYoga, i);
+    }
+  }
+
+  // Recurse into children.
+  for (const child of expectedChildren) {
+    ensureYogaChildrenSync(child);
+  }
+}
+
+/** Walk all roots and fix any Yoga ↔ GlyphNode child-list mismatches. */
+function ensureYogaTreeSync(roots: GlyphNode[], rootYoga: YogaNode): void {
+  // Also verify root-level children.
+  const expectedRootChildren: GlyphNode[] = [];
+  for (const r of roots) {
+    if (r.yogaNode) expectedRootChildren.push(r);
+  }
+  const rootCount = rootYoga.getChildCount();
+  let rootInSync = rootCount === expectedRootChildren.length;
+  if (rootInSync) {
+    for (let i = 0; i < rootCount; i++) {
+      if (rootYoga.getChild(i) !== expectedRootChildren[i]!.yogaNode) {
+        rootInSync = false;
+        break;
+      }
+    }
+  }
+  if (!rootInSync) {
+    while (rootYoga.getChildCount() > 0) {
+      rootYoga.removeChild(rootYoga.getChild(0));
+    }
+    for (let i = 0; i < expectedRootChildren.length; i++) {
+      const childYoga = expectedRootChildren[i]!.yogaNode!;
+      const prev = childYoga.getParent();
+      if (prev) prev.removeChild(childYoga);
+      rootYoga.insertChild(childYoga, i);
+    }
+  }
+  for (const child of expectedRootChildren) {
+    ensureYogaChildrenSync(child);
   }
 }
 
@@ -438,6 +509,11 @@ export function computeLayout(
   const t1 = performance.now();
   syncYogaStyles(roots);
   perf.syncYogaStyles = performance.now() - t1;
+
+  // 2b. Verify Yoga ↔ GlyphNode tree structure is in sync.
+  //     Fixes any mismatches caused by React commit-phase edge cases
+  //     (e.g. rapid create/delete cycles with unique keys).
+  ensureYogaTreeSync(roots, rootYoga);
 
   // 3. Update root dimensions and calculate layout
   const t2 = performance.now();

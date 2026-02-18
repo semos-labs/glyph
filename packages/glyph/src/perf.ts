@@ -39,6 +39,7 @@ export const framePerf = {
   cellsChanged: 0,
   cursorMoves: 0,
   sgrChanges: 0,
+  outputBytes: 0,
 
   // Swap (ms)
   swapCopy: 0,
@@ -63,6 +64,7 @@ export function resetFramePerf(): void {
   framePerf.cellsChanged = 0;
   framePerf.cursorMoves = 0;
   framePerf.sgrChanges = 0;
+  framePerf.outputBytes = 0;
   framePerf.swapCopy = 0;
 }
 

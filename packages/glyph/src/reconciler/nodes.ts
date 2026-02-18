@@ -150,7 +150,21 @@ export function appendTextChild(parent: GlyphNode, child: GlyphTextInstance): vo
 }
 
 export function removeChild(parent: GlyphNode, child: GlyphNode): void {
+  // Detach child's Yoga node from this parent's Yoga tree.
   yogaRemoveChild(parent, child);
+
+  // Free the *entire* Yoga subtree synchronously.
+  //
+  // React only calls hostConfig.removeChild for permanent deletions
+  // (not moves/reorders — those go through appendChild/insertBefore
+  // which handle repositioning internally).  Freeing now prevents
+  // zombie WASM objects from lingering until React's passive-effects
+  // phase fires detachDeletedInstance.
+  //
+  // NOTE: freeYogaSubtree must be called BEFORE we splice `child` out
+  // of parent.children, because it walks child.children recursively.
+  freeYogaSubtree(child);
+
   markLayoutDirty();
   parent._paintDirty = true;
 
@@ -277,18 +291,26 @@ export function yogaInsertBefore(
 }
 
 /**
- * Free a GlyphNode's Yoga node when it is permanently deleted.
+ * Free a single GlyphNode's Yoga node.
  *
- * React calls `detachDeletedInstance` top-down (parent before children).
- * We detach all Yoga children first so their `getParent()` returns null
- * when they are later freed — avoids a use-after-free on Yoga's WASM heap.
+ * Detaches from its Yoga parent, unsets any measure function, removes
+ * remaining Yoga children, then frees the WASM object.
+ *
+ * Safe to call when `yogaNode` is already `null` (no-op).
  */
 export function freeYogaNode(node: GlyphNode): void {
   if (!node.yogaNode) return;
 
   yogaDetach(node);
 
-  // Detach Yoga children before freeing this node
+  // Unset measure function before freeing to release the JS closure
+  // reference in the WASM callback table.
+  if (node._hasMeasureFunc) {
+    node.yogaNode.unsetMeasureFunc();
+    node._hasMeasureFunc = false;
+  }
+
+  // Detach any remaining Yoga children so they don't hold a stale parent.
   const yn = node.yogaNode;
   while (yn.getChildCount() > 0) {
     yn.removeChild(yn.getChild(0));
@@ -296,6 +318,27 @@ export function freeYogaNode(node: GlyphNode): void {
 
   yn.free();
   node.yogaNode = null;
+}
+
+/**
+ * Recursively free a GlyphNode subtree's Yoga nodes (bottom-up).
+ *
+ * React's `removeChild` is only called for *permanent* deletions (not
+ * moves/reorders).  By freeing the entire Yoga subtree synchronously
+ * during the mutation commit we avoid zombie WASM objects that linger
+ * between the mutation phase and React's passive-effects phase (where
+ * `detachDeletedInstance` would normally call `freeYogaNode`).
+ *
+ * When `detachDeletedInstance` fires later it finds `yogaNode === null`
+ * and harmlessly no-ops.
+ */
+export function freeYogaSubtree(node: GlyphNode): void {
+  // Free children first (bottom-up) so each child can safely
+  // detach itself from its Yoga parent while that parent is still alive.
+  for (const child of node.children) {
+    freeYogaSubtree(child);
+  }
+  freeYogaNode(node);
 }
 
 export function getInheritedTextStyle(node: GlyphNode): {

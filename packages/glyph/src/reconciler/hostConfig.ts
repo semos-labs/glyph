@@ -15,6 +15,7 @@ import {
   insertBefore as glyphInsertBefore,
   insertTextBefore as glyphInsertTextBefore,
   freeYogaNode,
+  freeYogaSubtree,
   yogaAppendChild,
   EMPTY_STYLE,
   shallowStyleEqual,
@@ -267,14 +268,16 @@ export const hostConfig = {
   ): void {
     if (child.type === "raw-text") return;
     const node = child as GlyphNode;
-    const idx = container.children.indexOf(node);
-    if (idx !== -1) {
-      container.children.splice(idx, 1);
-    }
-    // Sync Yoga tree
+    // Sync Yoga tree — detach from Yoga parent first
     if (container.yogaNode && node.yogaNode) {
       const parent = node.yogaNode.getParent();
       if (parent) parent.removeChild(node.yogaNode);
+    }
+    // Free the entire Yoga subtree synchronously (same rationale as removeChild)
+    freeYogaSubtree(node);
+    const idx = container.children.indexOf(node);
+    if (idx !== -1) {
+      container.children.splice(idx, 1);
     }
   },
 

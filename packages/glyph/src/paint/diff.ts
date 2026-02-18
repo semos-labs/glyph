@@ -101,22 +101,29 @@ export function diffFramebuffers(
   let cursorY = -1;
   let lastSGR = "";
 
+  // Disable auto-wrap on EVERY frame, not just full redraws.
+  // When auto-wrap is on and we write the last column, terminals enter a
+  // "pending-wrap" or "deferred-wrap" state.  The exact behavior differs:
+  //   • WezTerm: pending wrap is cleanly cancelled by the next CUP move.
+  //   • Kitty/Ghostty: pending wrap can corrupt cursor positioning when
+  //     combined with DEC 2026 synchronized output, especially during
+  //     rapid incremental updates (e.g. sliding window with unique keys).
+  // Disabling auto-wrap avoids the issue entirely.  We re-enable it
+  // at the end of the sync block so image rendering and native cursor
+  // behavior work normally between frames.
+  writeAscii(`${CSI}?7l`);
+
   if (fullRedraw) {
     // On full redraw (resize, first paint, force-redraw):
-    //  1. Disable auto-wrap — prevents the cursor from wrapping to the
-    //     next line when we write the very last column.  Some terminals
-    //     enter "pending-wrap" state which can interact badly with cursor
-    //     repositioning after resize.
-    //  2. Reset scroll region — removes any stale scroll-region that
+    //  1. Reset scroll region — removes any stale scroll-region that
     //     could clip output.
-    //  3. Clear entire screen (\x1b[2J) — this is significantly more
+    //  2. Clear entire screen (\x1b[2J) — this is significantly more
     //     robust than per-line \x1b[2K after a resize.  When a terminal
     //     shrinks, many emulators wrap/reflow existing alt-screen content,
     //     creating logical multi-row lines.  Per-line erase may only
     //     erase the logical line, leaving wrapped remnants.  \x1b[2J
     //     nukes everything unconditionally.
-    //  4. Home cursor — ensure we start from (0,0).
-    writeAscii(`${CSI}?7l`); // Disable auto-wrap
+    //  3. Home cursor — ensure we start from (0,0).
     writeAscii(`${CSI}r`);   // Reset scroll region
     writeAscii(`${CSI}2J`);  // Clear entire screen
     writeAscii(`${CSI}H`);   // Home cursor
@@ -176,11 +183,9 @@ export function diffFramebuffers(
     writeAscii(`${CSI}0m`);
   }
 
-  if (fullRedraw) {
-    // Re-enable auto-wrap so normal terminal behaviour is preserved
-    // for anything outside our paint cycle (e.g. images, cursor input).
-    writeAscii(`${CSI}?7h`);
-  }
+  // Re-enable auto-wrap so normal terminal behaviour is preserved
+  // for anything outside our paint cycle (e.g. images, cursor input).
+  writeAscii(`${CSI}?7h`);
 
   // ── Cursor handling (end of sync block) ──
   if (cursor) {
@@ -201,6 +206,10 @@ export function diffFramebuffers(
 
   // End synchronized update — terminal paints everything at once.
   writeAscii(`${CSI}?2026l`);
+
+  // Track output size for diagnostics (helps detect frames that might
+  // overwhelm a terminal's sync buffer).
+  perf.outputBytes = off;
 
   // Return a string — no API change.  All escape sequences are pure
   // ASCII so the mixed latin1/utf8 buffer is valid utf8 throughout.

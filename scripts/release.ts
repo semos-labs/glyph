@@ -194,15 +194,15 @@ async function main() {
 
   // 8. GitHub release (draft for RCs, published for stable)
   const ghArgs = isRC
-    ? $`gh release create ${tag} --generate-notes --title ${tag} --draft --prerelease`
+    ? $`gh release create ${tag} --generate-notes --title ${tag} --prerelease`
     : $`gh release create ${tag} --generate-notes --title ${tag}`;
 
   const gh = await ghArgs.quiet();
   if (gh.exitCode === 0) {
-    ok(`Created GitHub release${isRC ? " (draft, prerelease)" : ""}`);
+    ok(`Created GitHub release${isRC ? " (prerelease)" : ""}`);
   } else {
     const cmd = isRC
-      ? `gh release create ${tag} --generate-notes --title ${tag} --draft --prerelease`
+      ? `gh release create ${tag} --generate-notes --title ${tag} --prerelease`
       : `gh release create ${tag} --generate-notes --title ${tag}`;
     warn(`Could not create GitHub release — run manually:`);
     console.log(`      ${cyan(cmd)}`);

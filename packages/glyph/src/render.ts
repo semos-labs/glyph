@@ -9,7 +9,6 @@ import { Framebuffer } from "./paint/framebuffer.js";
 import { paintTree } from "./paint/painter.js";
 import { diffFramebuffers } from "./paint/diff.js";
 import { computeLayout, createRootYogaNode } from "./layout/yogaLayout.js";
-import { consumeStructuralChange } from "./reconciler/nodes.js";
 import { setTerminalPalette, getContrastCursorColor } from "./paint/color.js";
 import {
   InputContext,
@@ -408,20 +407,16 @@ export function render(
         fullRedraw = true;
       }
 
-      // fullRedraw = clear terminal screen (resize / init only)
-      // fullRepaint = repaint all nodes (structural change / layout change)
-      let fullRepaint = fullRedraw;
-
-      if (consumeStructuralChange()) {
-        fullRepaint = true;
-      }
+      // fullRedraw  = clear terminal screen (resize / init only)
+      // fullRepaint = repaint all nodes (only on resize / init — structural
+      //               and layout changes are handled per-node via _paintDirty)
+      const fullRepaint = fullRedraw;
 
       // ── Phase 1: Layout ──
       const tLayout0 = performance.now();
       const layoutChanged = computeLayout(container.children, cols, rows, rootYogaNode, fullRepaint);
       if (layoutChanged) {
         notifyLayoutSubscribers(container.children);
-        fullRepaint = true;
       }
       const tLayout1 = performance.now();
 

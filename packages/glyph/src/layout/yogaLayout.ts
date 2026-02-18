@@ -223,6 +223,10 @@ function extractLayout(node: GlyphNode, parentX: number, parentY: number): void 
       prev.innerX !== innerX || prev.innerY !== innerY ||
       prev.innerWidth !== innerWidth || prev.innerHeight !== innerHeight) {
     node.layout = { x, y, width, height, innerX, innerY, innerWidth, innerHeight };
+    // Node moved or resized → needs repaint.  Also mark parent so its area
+    // is pre-cleared (covers old child positions within the parent bounds).
+    node._paintDirty = true;
+    if (node.parent) node.parent._paintDirty = true;
   }
 
   for (const child of node.children) {

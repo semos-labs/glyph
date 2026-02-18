@@ -18,7 +18,6 @@ import {
   yogaAppendChild,
   EMPTY_STYLE,
   markLayoutDirty,
-  markStructuralChange,
 } from "./nodes.js";
 import type { Style } from "../types/index.js";
 
@@ -181,7 +180,6 @@ export const hostConfig = {
     node.parent = null;
     container.children.push(node);
     markLayoutDirty();
-    markStructuralChange();
     // Sync Yoga tree: add to root Yoga node
     if (container.yogaNode && node.yogaNode) {
       const prev = node.yogaNode.getParent();
@@ -334,7 +332,8 @@ export const hostConfig = {
     instance.hidden = true;
     if (instance.yogaNode) instance.yogaNode.setDisplay(Display.None);
     markLayoutDirty();
-    markStructuralChange();
+    instance._paintDirty = true;
+    if (instance.parent) instance.parent._paintDirty = true;
   },
 
   hideTextInstance(textInstance: GlyphTextInstance): void {
@@ -345,7 +344,8 @@ export const hostConfig = {
     instance.hidden = false;
     if (instance.yogaNode) instance.yogaNode.setDisplay(Display.Flex);
     markLayoutDirty();
-    markStructuralChange();
+    instance._paintDirty = true;
+    if (instance.parent) instance.parent._paintDirty = true;
   },
 
   unhideTextInstance(textInstance: GlyphTextInstance, text: string): void {

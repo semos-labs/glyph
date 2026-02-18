@@ -57,15 +57,6 @@ export function markLayoutDirty(): void { _layoutDirty = true; }
 export function isLayoutDirty(): boolean { return _layoutDirty; }
 export function resetLayoutDirty(): void { _layoutDirty = false; }
 
-// ── Structural change tracking ──────────────────────────────────
-// Structural changes (add/remove/move nodes) require full repaint.
-let _structuralChange = false;
-export function markStructuralChange(): void { _structuralChange = true; }
-export function consumeStructuralChange(): boolean {
-  const v = _structuralChange;
-  _structuralChange = false;
-  return v;
-}
 
 let nextFocusId = 0;
 export function generateFocusId(): string {
@@ -112,7 +103,7 @@ export function appendChild(parent: GlyphNode, child: GlyphNode): void {
 
   yogaAppendChild(parent, child);
   markLayoutDirty();
-  markStructuralChange();
+  parent._paintDirty = true;
 }
 
 export function appendTextChild(parent: GlyphNode, child: GlyphTextInstance): void {
@@ -131,7 +122,7 @@ export function appendTextChild(parent: GlyphNode, child: GlyphTextInstance): vo
 export function removeChild(parent: GlyphNode, child: GlyphNode): void {
   yogaRemoveChild(parent, child);
   markLayoutDirty();
-  markStructuralChange();
+  parent._paintDirty = true;
 
   const idx = parent.children.indexOf(child);
   if (idx !== -1) {
@@ -181,7 +172,7 @@ export function insertBefore(
 
   yogaInsertBefore(parent, child, beforeChild);
   markLayoutDirty();
-  markStructuralChange();
+  parent._paintDirty = true;
 }
 
 export function insertTextBefore(

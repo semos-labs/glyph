@@ -20,6 +20,8 @@ interface PaintEntry {
   node: GlyphNode;
   clip: ClipRect;
   zIndex: number;
+  /** Whether this node (or an ancestor) is dirty and needs repainting. */
+  dirty: boolean;
 }
 
 export interface CursorScreenPosition {
@@ -61,7 +63,7 @@ export function paintTree(
 
   for (const root of roots) {
     if (root.hidden) continue;
-    collectPaintEntries(root, screenClip, root.resolvedStyle.zIndex ?? 0, entries);
+    collectPaintEntries(root, screenClip, root.resolvedStyle.zIndex ?? 0, entries, false);
   }
 
   // Sort by zIndex (stable sort preserves tree order within same z)
@@ -71,16 +73,19 @@ export function paintTree(
   for (const entry of entries) {
     const node = entry.node;
 
-    // On incremental frames, skip nodes whose content hasn't changed
-    if (!full && !node._paintDirty) continue;
+    // On incremental frames, skip nodes that aren't dirty
+    // (dirty = node._paintDirty OR an ancestor was dirty)
+    if (!full && !entry.dirty) continue;
 
-    // On incremental frames, clear text/input inner area first
-    // (old characters past the end of new text would otherwise linger)
-    if (!full && (node.type === "text" || node.type === "input")) {
-      const { innerX, innerY, innerWidth, innerHeight } = node.layout;
+    // On incremental frames, pre-clear the node's area so stale pixels
+    // from removed/moved children or shorter text are erased.
+    // Nodes with their own bg will be re-filled by paintNode anyway,
+    // so only clear nodes without bg (their backdrop is the parent's bg).
+    if (!full && !node.resolvedStyle.bg) {
+      const { x, y, width, height } = node.layout;
       const inherited = getInheritedTextStyle(node);
-      for (let row = innerY; row < innerY + innerHeight; row++) {
-        for (let col = innerX; col < innerX + innerWidth; col++) {
+      for (let row = y; row < y + height; row++) {
+        for (let col = x; col < x + width; col++) {
           if (isInClip(col, row, entry.clip)) {
             fb.setChar(col, row, " ", undefined, inherited.bg);
           }
@@ -105,14 +110,17 @@ function collectPaintEntries(
   parentClip: ClipRect,
   parentZ: number,
   entries: PaintEntry[],
+  ancestorDirty: boolean,
 ): void {
   if (node.hidden) return;
 
   const zIndex = node.resolvedStyle.zIndex ?? parentZ;
+  // A node is "dirty" if it or any ancestor is dirty
+  const dirty = node._paintDirty || ancestorDirty;
 
   // Clip rect for THIS node's own painting (bg, border, text).
   // Uses parentClip so the node can paint within its parent's bounds.
-  entries.push({ node, clip: parentClip, zIndex });
+  entries.push({ node, clip: parentClip, zIndex, dirty });
 
   // Clip rect for CHILDREN.
   // Only clip when the node explicitly opts in via `clip: true`
@@ -133,7 +141,7 @@ function collectPaintEntries(
   // Children - skip for text/input (leaf nodes for painting)
   if (node.type !== "text" && node.type !== "input") {
     for (const child of node.children) {
-      collectPaintEntries(child, childClip, zIndex, entries);
+      collectPaintEntries(child, childClip, zIndex, entries, dirty);
     }
   }
 }

@@ -106,8 +106,6 @@ function resetYogaNode(yogaNode: YogaNode): void {
 
 function applyStyleToYogaNode(yogaNode: YogaNode, style: ResolvedStyle, nodeType: string): void {
   // Reset all properties first to clear stale values from previous styles.
-  // This is critical when React reuses a host node (commitUpdate) — e.g.
-  // a Box that had flexGrow:1 + padding:1 becomes a title row with neither.
   resetYogaNode(yogaNode);
 
   // Dimensions

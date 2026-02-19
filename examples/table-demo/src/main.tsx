@@ -1,14 +1,31 @@
-import React from "react";
-import { render, Box, Text, Table, TableRow, TableCell, useInput } from "@semos-labs/glyph";
+import React, { useState } from "react";
+import { render, Box, Text, ScrollView, Table, TableRow, TableCell, useInput, useLayout } from "@semos-labs/glyph";
 
 function App() {
+  const [scrollOffset, setScrollOffset] = useState(0);
+
   useInput((key) => {
     if (key.name === "q" || (key.ctrl && key.name === "c")) {
       process.exit(0);
     }
+
+    const halfPage = 10;
+    const fullPage = 20;
+
+    if (key.name === "up") setScrollOffset((o) => Math.max(0, o - 1));
+    else if (key.name === "down") setScrollOffset((o) => o + 1);
+    else if (key.name === "pageup") setScrollOffset((o) => Math.max(0, o - fullPage));
+    else if (key.name === "pagedown") setScrollOffset((o) => o + fullPage);
+    else if (key.ctrl) {
+      if (key.name === "d") setScrollOffset((o) => o + halfPage);
+      else if (key.name === "u") setScrollOffset((o) => Math.max(0, o - halfPage));
+      else if (key.name === "f") setScrollOffset((o) => o + fullPage);
+      else if (key.name === "b") setScrollOffset((o) => Math.max(0, o - fullPage));
+    }
   });
 
   return (
+    <ScrollView scrollOffset={scrollOffset} onScroll={setScrollOffset} style={{ flexGrow: 1 }}>
     <Box style={{ flexDirection: "column", padding: 1, gap: 2 }}>
       <Text style={{ bold: true, color: "yellowBright" }}>
         ✨ Table Component Demo
@@ -86,8 +103,40 @@ function App() {
         </Table>
       </Box>
 
-      <Text style={{ dim: true }}>Press 'q' to quit</Text>
+      {/* ── Column wrap ── */}
+      <Box style={{ flexDirection: "column", gap: 1 }}>
+        <Text style={{ color: "yellow", bold: true }}>Column wrap (hugs content):</Text>
+        <Table wrap borderColor="yellow">
+          <TableRow>
+            <TableCell style={{ bold: true }}>ID</TableCell>
+            <TableCell style={{ bold: true }}>Name</TableCell>
+            <TableCell style={{ bold: true }}>Status</TableCell>
+            <TableCell style={{ bold: true }}>Description</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell>1</TableCell>
+            <TableCell>Alice</TableCell>
+            <TableCell style={{ color: "green" }}>OK</TableCell>
+            <TableCell>Frontend engineer</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell>42</TableCell>
+            <TableCell>Bob</TableCell>
+            <TableCell style={{ color: "red" }}>ERR</TableCell>
+            <TableCell>Backend lead</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell>7</TableCell>
+            <TableCell>Charlie</TableCell>
+            <TableCell style={{ color: "green" }}>OK</TableCell>
+            <TableCell>PM</TableCell>
+          </TableRow>
+        </Table>
+      </Box>
+
+      <Text style={{ dim: true }}>Press 'q' to quit • ↑/↓ to scroll</Text>
     </Box>
+    </ScrollView>
   );
 }
 

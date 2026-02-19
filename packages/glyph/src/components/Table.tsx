@@ -47,9 +47,54 @@ const TABLE_BORDERS: Record<Exclude<BorderStyle, "none">, TableBorderChars> = {
 interface TableContextValue {
   chars: TableBorderChars;
   borderColor?: Color;
+  /** Per-column content widths (including padding). `null` when `wrap` is off. */
+  columnWidths: number[] | null;
 }
 
 const TableContext = createContext<TableContextValue | null>(null);
+
+// ── Content measurement ─────────────────────────────────────────
+
+/** Recursively sum the text length of React children (single-line approximation). */
+function extractTextLength(node: ReactNode): number {
+  if (node == null || typeof node === "boolean") return 0;
+  if (typeof node === "string") return node.length;
+  if (typeof node === "number") return String(node).length;
+  if (Array.isArray(node))
+    return node.reduce((sum: number, c) => sum + extractTextLength(c), 0);
+  if (React.isValidElement(node))
+    return extractTextLength((node as ReactElement<any>).props.children);
+  return 0;
+}
+
+/**
+ * Scan every row to find the maximum content width of each column.
+ * Width includes the cell's horizontal padding (defaults to `1` per side).
+ */
+function measureColumnWidths(rows: ReactElement[]): number[] {
+  const maxWidths: number[] = [];
+  for (const row of rows) {
+    const cells = React.Children.toArray(
+      (row.props as TableRowProps).children,
+    ).filter(React.isValidElement);
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i] as ReactElement<TableCellProps>;
+      const s = cell.props.style;
+      const padL =
+        typeof s?.paddingLeft === "number" ? s.paddingLeft
+        : typeof s?.paddingX === "number" ? s.paddingX
+        : 1;
+      const padR =
+        typeof s?.paddingRight === "number" ? s.paddingRight
+        : typeof s?.paddingX === "number" ? s.paddingX
+        : 1;
+      const textLen = extractTextLength(cell.props.children);
+      const total = textLen + padL + padR;
+      maxWidths[i] = Math.max(maxWidths[i] ?? 0, total);
+    }
+  }
+  return maxWidths;
+}
 
 // ── Internal helpers ─────────────────────────────────────────────
 
@@ -69,11 +114,13 @@ function HorizontalRule({
   colCount,
   chars,
   borderColor,
+  columnWidths,
 }: {
   position: SepPosition;
   colCount: number;
   chars: TableBorderChars;
   borderColor?: Color;
+  columnWidths: number[] | null;
 }): ReactElement {
   const left =
     position === "top" ? chars.topLeft
@@ -106,12 +153,16 @@ function HorizontalRule({
       );
     }
     // Horizontal fill ─────
-    // flexBasis:0 ensures the grow algorithm distributes space
-    // identically to the cell-wrapper boxes in the content row.
+    // When wrap is on (columnWidths != null), each fill gets an exact
+    // width matching the measured content.  Otherwise flexBasis:0 +
+    // flexGrow:1 distributes space equally across all columns.
+    const fillBoxStyle: Style = columnWidths
+      ? { width: columnWidths[i] }
+      : { flexGrow: 1, flexBasis: 0 };
     items.push(
       React.createElement(
         "box" as any,
-        { key: `f${i}`, style: { flexGrow: 1, flexBasis: 0 } },
+        { key: `f${i}`, style: fillBoxStyle },
         React.createElement(
           "text" as any,
           { style: fillStyle },
@@ -143,6 +194,13 @@ export interface TableProps {
   border?: BorderStyle;
   /** Border / grid-line color. */
   borderColor?: Color;
+  /**
+   * When `true`, each column shrinks to the width of its widest cell
+   * content instead of distributing space equally.
+   *
+   * @default false
+   */
+  wrap?: boolean;
   /** Additional style for the outer table container. */
   style?: Style;
   /** {@link TableRow} children. */
@@ -186,12 +244,17 @@ export function Table({
   style,
   border = "single",
   borderColor,
+  wrap = false,
 }: TableProps): ReactElement {
   const bs: Exclude<BorderStyle, "none"> = border === "none" ? "single" : border;
   const chars = TABLE_BORDERS[bs];
-  const ctx: TableContextValue = { chars, borderColor };
 
-  const rows = React.Children.toArray(children).filter(React.isValidElement);
+  const rows = React.Children.toArray(children).filter(
+    React.isValidElement,
+  ) as ReactElement[];
+
+  const columnWidths = wrap ? measureColumnWidths(rows) : null;
+  const ctx: TableContextValue = { chars, borderColor, columnWidths };
 
   const content: ReactNode[] = [];
   for (let i = 0; i < rows.length; i++) {
@@ -277,15 +340,16 @@ export function TableRow(props: TableRowProps): ReactElement {
         React.createElement("text" as any, { key: `vs${i}`, style: colorStyle }, chars.vertical),
       );
     }
-    // Cell wrapper — flexBasis:0 + flexGrow:1 gives every column an
-    // equal share of the remaining space (matching the fill boxes).
-    // Unlike width:0, flexBasis:0 lets Yoga measure children at the
-    // resolved (post-grow) width, so text wraps at the real column
-    // width instead of 0.
+    // Cell wrapper — when wrap is on, each cell gets an exact width
+    // matching the measured content.  Otherwise flexBasis:0 + flexGrow:1
+    // gives every column an equal share of the remaining space.
+    const cellBoxStyle: Style = ctx.columnWidths
+      ? { width: ctx.columnWidths[i] }
+      : { flexGrow: 1, flexBasis: 0 };
     contentItems.push(
       React.createElement(
         "box" as any,
-        { key: `c${i}`, style: { flexGrow: 1, flexBasis: 0 } },
+        { key: `c${i}`, style: cellBoxStyle },
         cells[i],
       ),
     );
@@ -310,6 +374,7 @@ export function TableRow(props: TableRowProps): ReactElement {
       colCount,
       chars,
       borderColor,
+      columnWidths: ctx.columnWidths,
     }),
     contentRow,
   ];
@@ -322,6 +387,7 @@ export function TableRow(props: TableRowProps): ReactElement {
         colCount,
         chars,
         borderColor,
+        columnWidths: ctx.columnWidths,
       }),
     );
   }

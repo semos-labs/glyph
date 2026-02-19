@@ -1,7 +1,23 @@
 import { useContext, useCallback } from "react";
-import { ScrollViewContext } from "./context.js";
-import type { ScrollIntoViewOptions } from "./context.js";
+import { ScrollViewContext, nodeScrollContextMap } from "./context.js";
+import type { ScrollIntoViewOptions, ScrollViewContextValue } from "./context.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
+
+/**
+ * Walk up the GlyphNode parent chain to find the nearest ScrollView
+ * context registered in the `nodeScrollContextMap`.  This allows the
+ * hook to work even when called from **outside** the ScrollView's
+ * React subtree (e.g. a parent or sibling component).
+ */
+function findScrollContextFromNode(node: GlyphNode): ScrollViewContextValue | null {
+  let current: GlyphNode | null = node.parent;
+  while (current) {
+    const ctx = nodeScrollContextMap.get(current);
+    if (ctx) return ctx;
+    current = current.parent;
+  }
+  return null;
+}
 
 /**
  * Returns a function that scrolls the nearest parent {@link ScrollView}
@@ -9,6 +25,10 @@ import type { GlyphNode } from "../reconciler/nodes.js";
  *
  * This is the non-focusable counterpart to `handle.scrollIntoView()` —
  * use it with plain `Box` refs or any `GlyphNode`.
+ *
+ * Works both when the calling component is **inside** the ScrollView
+ * (via React context) and when it is **outside** (by walking up the
+ * target node's parent chain).
  *
  * @param nodeRef - React ref pointing to the target node.
  * @returns A stable callback you can invoke to scroll to the node.
@@ -31,8 +51,13 @@ export function useScrollIntoView(
 
   return useCallback(
     (options?: ScrollIntoViewOptions) => {
-      if (!scrollCtx || !nodeRef.current) return;
-      scrollCtx.scrollTo(nodeRef.current, options);
+      if (!nodeRef.current) return;
+      // Prefer the React context (caller is inside the ScrollView tree),
+      // but fall back to walking up the GlyphNode parent chain when the
+      // hook is used from outside the ScrollView.
+      const ctx = scrollCtx ?? findScrollContextFromNode(nodeRef.current);
+      if (!ctx) return;
+      ctx.scrollTo(nodeRef.current, options);
     },
     [scrollCtx, nodeRef],
   );

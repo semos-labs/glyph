@@ -57,6 +57,22 @@ export interface LayoutContextValue {
 
 export const LayoutContext = createContext<LayoutContextValue | null>(null);
 
+// ---- Frame Timing ----
+
+/** Per-phase timing breakdown of a single `performRender` call (ms). */
+export interface FrameTiming {
+  /** Total frame time (layout + paint + diff + swap). */
+  total: number;
+  /** Responsive style resolution + Yoga layout. */
+  layout: number;
+  /** Rasterise GlyphNode tree into the framebuffer. */
+  paint: number;
+  /** Character-level diff + ANSI escape generation. */
+  diff: number;
+  /** Copy currentFb → prevFb. */
+  swap: number;
+}
+
 // ---- App Context ----
 export interface AppContextValue {
   registerNode(node: GlyphNode): void;
@@ -69,6 +85,12 @@ export interface AppContextValue {
   rows: number;
   /** Subscribe to terminal resize events. Returns an unsubscribe function. */
   onResize(handler: () => void): () => void;
+  /** Duration of the last `performRender` call in milliseconds. */
+  lastFrameTime: number;
+  /** Per-phase breakdown of the last frame's render time. */
+  frameTiming: FrameTiming;
+  /** Whether debug mode is enabled via `render(element, { debug: true })`. */
+  debug: boolean;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);
@@ -112,9 +134,27 @@ export interface ScrollViewContextValue {
   getBounds(): ScrollViewBounds;
   /** Scroll to make the given node visible within this ScrollView */
   scrollTo(node: GlyphNode, options?: ScrollIntoViewOptions): void;
+  /**
+   * Scroll to make the child at `index` visible.
+   * Works even when the item is off-screen (not mounted).
+   */
+  scrollToIndex(index: number, options?: ScrollIntoViewOptions): void;
 }
 
 export const ScrollViewContext = createContext<ScrollViewContextValue | null>(null);
+
+/**
+ * Maps a ScrollView's **content node** (`GlyphNode`) to its
+ * `ScrollViewContextValue`.  This allows `useScrollIntoView` to locate
+ * the correct ScrollView even when called from *outside* the React
+ * subtree (i.e. from a parent/sibling component).
+ *
+ * Populated by `ScrollView` when its inner content ref is attached.
+ * Looked up by walking up the target node's parent chain.
+ *
+ * @internal
+ */
+export const nodeScrollContextMap = new WeakMap<GlyphNode, ScrollViewContextValue>();
 
 // ---- Image Overlay Context ----
 /** Pending image to be rendered after framebuffer paint */

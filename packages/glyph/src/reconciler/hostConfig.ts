@@ -1,3 +1,4 @@
+import { Display } from "yoga-layout";
 import type {
   GlyphNode,
   GlyphTextInstance,
@@ -13,6 +14,13 @@ import {
   removeTextChild as glyphRemoveTextChild,
   insertBefore as glyphInsertBefore,
   insertTextBefore as glyphInsertTextBefore,
+  freeYogaNode,
+  freeYogaSubtree,
+  yogaAppendChild,
+  EMPTY_STYLE,
+  shallowStyleEqual,
+  markLayoutDirty,
+  collectStaleRects,
 } from "./nodes.js";
 import type { Style } from "../types/index.js";
 
@@ -49,7 +57,10 @@ export const hostConfig = {
   afterActiveInstanceBlur: () => {},
   prepareScopeUpdate: () => {},
   getInstanceFromScope: () => null,
-  detachDeletedInstance: () => {},
+  detachDeletedInstance(instance: GlyphNode | GlyphTextInstance): void {
+    if (instance.type === "raw-text") return;
+    freeYogaNode(instance as GlyphNode);
+  },
 
   requestPostPaintCallback: (_callback: any) => {},
 
@@ -171,6 +182,13 @@ export const hostConfig = {
     const node = child as GlyphNode;
     node.parent = null;
     container.children.push(node);
+    markLayoutDirty();
+    // Sync Yoga tree: add to root Yoga node
+    if (container.yogaNode && node.yogaNode) {
+      const prev = node.yogaNode.getParent();
+      if (prev) prev.removeChild(node.yogaNode);
+      container.yogaNode.insertChild(node.yogaNode, container.yogaNode.getChildCount());
+    }
   },
 
   insertBefore(
@@ -197,6 +215,8 @@ export const hostConfig = {
       } else {
         parentInstance.allChildren.push(node);
       }
+      // Sync Yoga tree (raw-text has no yogaNode, just append)
+      yogaAppendChild(parentInstance, node);
     } else {
       glyphInsertBefore(parentInstance, child as GlyphNode, beforeChild as GlyphNode);
     }
@@ -215,6 +235,18 @@ export const hostConfig = {
       container.children.splice(idx, 0, node);
     } else {
       container.children.push(node);
+    }
+    // Sync Yoga tree — derive index from container.children order
+    // (yoga getChild() returns new wrapper objects, so === comparison fails)
+    if (container.yogaNode && node.yogaNode && before.yogaNode) {
+      const prev = node.yogaNode.getParent();
+      if (prev) prev.removeChild(node.yogaNode);
+      let yogaIdx = 0;
+      for (const sibling of container.children) {
+        if (sibling === node) break;
+        if (sibling.yogaNode) yogaIdx++;
+      }
+      container.yogaNode.insertChild(node.yogaNode, yogaIdx);
     }
   },
 
@@ -235,6 +267,17 @@ export const hostConfig = {
   ): void {
     if (child.type === "raw-text") return;
     const node = child as GlyphNode;
+    // Save the removed subtree's screen area for stale-rect clearing
+    // (same as removeChild — needed for overlays like JumpNav at root level)
+    collectStaleRects(node);
+    // Sync Yoga tree — detach from Yoga parent first
+    if (container.yogaNode && node.yogaNode) {
+      const parent = node.yogaNode.getParent();
+      if (parent) parent.removeChild(node.yogaNode);
+    }
+    // Free the entire Yoga subtree synchronously (same rationale as removeChild)
+    freeYogaSubtree(node);
+    markLayoutDirty();
     const idx = container.children.indexOf(node);
     if (idx !== -1) {
       container.children.splice(idx, 1);
@@ -252,6 +295,18 @@ export const hostConfig = {
       textInstance.parent.text = textInstance.parent.rawTextChildren
         .map((t) => t.text)
         .join("");
+      textInstance.parent._paintDirty = true;
+      // Only mark Yoga dirty when text length changes (measurement may differ).
+      // Guard: markDirty() requires the Yoga node to be a leaf with a measure
+      // function.  Only `text` and `input` GlyphNodes satisfy this — a `box`
+      // parent with both raw-text and element children would crash Yoga's
+      // assertion ("Only leaf nodes with custom measure functions…").
+      if (textInstance.parent.yogaNode &&
+          textInstance.parent._hasMeasureFunc &&
+          _oldText.length !== newText.length) {
+        textInstance.parent.yogaNode.markDirty();
+        markLayoutDirty();
+      }
     }
   },
 
@@ -265,7 +320,36 @@ export const hostConfig = {
     _internalHandle: any,
   ): void {
     instance.props = newProps;
-    instance.style = (newProps.style as Style) ?? {};
+
+    // ── Style change detection ──
+    // React re-renders create new style objects with identical values.
+    // Only update instance.style (and mark dirty) when VALUES differ.
+    // Keeping the old reference stable prevents cascading:
+    //   resolveNodeStyles skips → syncYogaStyles skips → text cache hits.
+    const newStyle = (newProps.style as Style | undefined) ?? EMPTY_STYLE;
+    if (newStyle !== instance.style) {
+      if (!shallowStyleEqual(instance.style, newStyle)) {
+        instance.style = newStyle;
+        instance._paintDirty = true;
+        markLayoutDirty();
+      }
+      // else: same values, keep old reference — nothing to do
+    }
+
+    // ── Input content changes ──
+    if (instance.type === "input") {
+      if (_oldProps.value !== newProps.value ||
+          _oldProps.placeholder !== newProps.placeholder ||
+          _oldProps.cursorPosition !== newProps.cursorPosition) {
+        instance._paintDirty = true;
+        if (instance.yogaNode &&
+            (_oldProps.value !== newProps.value || _oldProps.placeholder !== newProps.placeholder)) {
+          instance.yogaNode.markDirty();
+          markLayoutDirty();
+        }
+      }
+    }
+
     if (newProps.focusable && !instance.focusId) {
       instance.focusId = `focus-${Math.random().toString(36).slice(2, 9)}`;
     }
@@ -273,6 +357,10 @@ export const hostConfig = {
 
   hideInstance(instance: GlyphNode): void {
     instance.hidden = true;
+    if (instance.yogaNode) instance.yogaNode.setDisplay(Display.None);
+    markLayoutDirty();
+    instance._paintDirty = true;
+    if (instance.parent) instance.parent._paintDirty = true;
   },
 
   hideTextInstance(textInstance: GlyphTextInstance): void {
@@ -281,6 +369,10 @@ export const hostConfig = {
 
   unhideInstance(instance: GlyphNode, _props: Props): void {
     instance.hidden = false;
+    if (instance.yogaNode) instance.yogaNode.setDisplay(Display.Flex);
+    markLayoutDirty();
+    instance._paintDirty = true;
+    if (instance.parent) instance.parent._paintDirty = true;
   },
 
   unhideTextInstance(textInstance: GlyphTextInstance, text: string): void {
@@ -288,6 +380,12 @@ export const hostConfig = {
   },
 
   clearContainer(container: GlyphContainer): void {
+    // Detach all Yoga children from root
+    if (container.yogaNode) {
+      while (container.yogaNode.getChildCount() > 0) {
+        container.yogaNode.removeChild(container.yogaNode.getChild(0));
+      }
+    }
     container.children.length = 0;
   },
 

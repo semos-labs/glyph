@@ -126,11 +126,6 @@ function renderKittyGraphics(opts: ImageRenderOptions): string {
   const chunkSize = 4096;
   const result: string[] = [moveCursor];
   
-  // In tmux, hide cursor first (not wrapped)
-  if (inTmux()) {
-    result.unshift(`${ESC}[?25l`);
-  }
-
   for (let i = 0; i < base64.length; i += chunkSize) {
     const chunk = base64.slice(i, i + chunkSize);
     const isLast = i + chunkSize >= base64.length;
@@ -147,11 +142,9 @@ function renderKittyGraphics(opts: ImageRenderOptions): string {
     
     result.push(tmuxWrap(escSeq));
   }
-  
-  // In tmux, show cursor after (not wrapped)
-  if (inTmux()) {
-    result.push(`${ESC}[?25h`);
-  }
+  // Note: cursor hide/show is handled centrally by the render loop
+  // (render.ts) after all images are rendered.  Don't add ?25l/?25h
+  // here — it would desync the nativeCursorVisible tracker.
 
   return result.join("");
 }

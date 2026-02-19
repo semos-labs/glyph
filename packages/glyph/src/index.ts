@@ -19,7 +19,7 @@ export type { PortalProps } from "./components/Portal.js";
 export { Button } from "./components/Button.js";
 export type { ButtonProps } from "./components/Button.js";
 export { ScrollView } from "./components/ScrollView.js";
-export type { ScrollViewProps, VisibleRange } from "./components/ScrollView.js";
+export type { ScrollViewProps, ScrollViewHandle, VisibleRange } from "./components/ScrollView.js";
 export { List } from "./components/List.js";
 export type { ListProps, ListItemInfo } from "./components/List.js";
 export { Menu } from "./components/Menu.js";
@@ -52,6 +52,8 @@ export { HelpDialog } from "./components/HelpDialog.js";
 export type { HelpDialogProps } from "./components/HelpDialog.js";
 export { StatusBar, useStatusBar } from "./components/StatusBar.js";
 export type { StatusBarProps, StatusBarMessage, StatusBarContextValue, MessageType } from "./components/StatusBar.js";
+export { DebugOverlay } from "./components/DebugOverlay.js";
+export type { DebugOverlayProps } from "./components/DebugOverlay.js";
 
 // Hooks
 export { useInput } from "./hooks/useInput.js";
@@ -108,4 +110,4 @@ export type {
   LinkHandle,
   TextHandle,
 } from "./types/index.js";
-export type { ScrollIntoViewOptions } from "./hooks/context.js";
+export type { ScrollIntoViewOptions, FrameTiming } from "./hooks/context.js";

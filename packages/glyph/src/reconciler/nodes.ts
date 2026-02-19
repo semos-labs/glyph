@@ -1,7 +1,15 @@
+import Yoga from "yoga-layout";
 import type { Node as YogaNode } from "yoga-layout";
 import type { Style, ResolvedStyle, LayoutRect, Color } from "../types/index.js";
 
 export type GlyphNodeType = "box" | "text" | "input";
+
+/**
+ * Layout rects of recently-removed nodes whose screen area must be cleared
+ * on the next paint frame.  `removeChild` pushes to this list; `paintTree`
+ * drains it during the pre-clear pass.
+ */
+export const pendingStaleRects: Array<{ x: number; y: number; width: number; height: number }> = [];
 
 export type GlyphChild = GlyphNode | GlyphTextInstance;
 
@@ -21,6 +29,24 @@ export interface GlyphNode {
   layout: LayoutRect;
   focusId: string | null;
   hidden: boolean;
+  /** @internal Cache: terminal columns when resolvedStyle was last computed. */
+  _lastColumns: number;
+  /** @internal Cache: style object reference when resolvedStyle was last computed. */
+  _lastStyleRef: Style | null;
+  /** @internal Cache: resolvedStyle reference when Yoga styles were last applied. */
+  _lastYogaStyle: ResolvedStyle | null;
+  /** @internal Whether a Yoga measure function has been installed on this node. */
+  _hasMeasureFunc: boolean;
+  /** @internal Whether this node's visual content changed since the last paint. */
+  _paintDirty: boolean;
+  /** @internal Previous layout rect — set when layout changes so the painter can clear the OLD position. */
+  _prevLayout: LayoutRect | null;
+  /** @internal Cached Yoga relative left offset (avoids WASM reads when parent moved). */
+  _relLeft: number;
+  /** @internal Cached Yoga relative top offset (avoids WASM reads when parent moved). */
+  _relTop: number;
+  /** @internal Cached text rasterization result (managed by painter.ts). */
+  _textCache: any;
 }
 
 export interface GlyphTextInstance {
@@ -33,7 +59,51 @@ export interface GlyphContainer {
   type: "root";
   children: GlyphNode[];
   onCommit: () => void;
+  yogaNode?: YogaNode;
 }
+
+// ── Shared empty style (avoids creating new {} on every commitUpdate) ──
+export const EMPTY_STYLE: Style = Object.freeze({}) as Style;
+
+/**
+ * Fast shallow equality for Style objects.  Compares own keys with `===`.
+ * Returns `true` when every property is reference-identical — covers all
+ * primitives (strings, numbers, booleans) and same-reference objects.
+ */
+export function shallowStyleEqual(a: Style, b: Style): boolean {
+  const aRec = a as Record<string, unknown>;
+  const bRec = b as Record<string, unknown>;
+  const aKeys = Object.keys(aRec);
+  const bKeys = Object.keys(bRec);
+  if (aKeys.length !== bKeys.length) return false;
+  for (let i = 0; i < aKeys.length; i++) {
+    const k = aKeys[i]!;
+    if (aRec[k] !== bRec[k]) return false;
+  }
+  return true;
+}
+
+// ── Layout dirty tracking ───────────────────────────────────────
+// Tracks whether Yoga calculateLayout needs to run.
+let _layoutDirty = true;
+export function markLayoutDirty(): void { _layoutDirty = true; }
+export function isLayoutDirty(): boolean { return _layoutDirty; }
+export function resetLayoutDirty(): void { _layoutDirty = false; }
+
+/**
+ * Walk a subtree and push every non-zero layout rect into
+ * {@link pendingStaleRects} so the painter can clear those screen areas.
+ */
+export function collectStaleRects(node: GlyphNode): void {
+  const { x, y, width, height } = node.layout;
+  if (width > 0 && height > 0) {
+    pendingStaleRects.push({ x, y, width, height });
+  }
+  for (const child of node.children) {
+    collectStaleRects(child);
+  }
+}
+
 
 let nextFocusId = 0;
 export function generateFocusId(): string {
@@ -54,11 +124,20 @@ export function createGlyphNode(
     rawTextChildren: [],
     allChildren: [],
     parent: null,
-    yogaNode: null,
+    yogaNode: Yoga.Node.create(),
     text: null,
     layout: { x: 0, y: 0, width: 0, height: 0, innerX: 0, innerY: 0, innerWidth: 0, innerHeight: 0 },
     focusId: type === "input" ? generateFocusId() : (props.focusable ? generateFocusId() : null),
     hidden: false,
+    _lastColumns: -1,
+    _lastStyleRef: null,
+    _lastYogaStyle: null,
+    _hasMeasureFunc: false,
+    _paintDirty: true,
+    _prevLayout: null,
+    _relLeft: 0,
+    _relTop: 0,
+    _textCache: null,
   };
 }
 
@@ -72,6 +151,17 @@ export function appendChild(parent: GlyphNode, child: GlyphNode): void {
   child.parent = parent;
   parent.children.push(child);
   parent.allChildren.push(child);
+
+  yogaAppendChild(parent, child);
+  markLayoutDirty();
+  // NOTE: we intentionally do NOT set parent._paintDirty here.
+  // The parent's own visual content (bg, border) hasn't changed — only
+  // its children list.  If the new child causes layout shifts,
+  // extractLayout will set _paintDirty + _prevLayout on each affected
+  // node.  Eagerly dirtying the parent triggers a destructive pre-clear
+  // of its entire area (Pass 1 Case 2), which wipes content underneath
+  // overlays like JumpNav whose absolute-positioned children don't
+  // affect the parent's layout at all.
 }
 
 export function appendTextChild(parent: GlyphNode, child: GlyphTextInstance): void {
@@ -88,6 +178,31 @@ export function appendTextChild(parent: GlyphNode, child: GlyphTextInstance): vo
 }
 
 export function removeChild(parent: GlyphNode, child: GlyphNode): void {
+  // Save the removed subtree's screen area so the painter can clear it.
+  // This is critical for absolute-positioned children (e.g. Select
+  // dropdowns) whose area falls OUTSIDE the parent's layout rect —
+  // marking the parent dirty alone won't clear the removed overlay.
+  collectStaleRects(child);
+
+  // Detach child's Yoga node from this parent's Yoga tree.
+  yogaRemoveChild(parent, child);
+
+  // Free the *entire* Yoga subtree synchronously.
+  //
+  // React only calls hostConfig.removeChild for permanent deletions
+  // (not moves/reorders — those go through appendChild/insertBefore
+  // which handle repositioning internally).  Freeing now prevents
+  // zombie WASM objects from lingering until React's passive-effects
+  // phase fires detachDeletedInstance.
+  //
+  // NOTE: freeYogaSubtree must be called BEFORE we splice `child` out
+  // of parent.children, because it walks child.children recursively.
+  freeYogaSubtree(child);
+
+  markLayoutDirty();
+  // Don't set parent._paintDirty — pendingStaleRects handles the removed
+  // area, and extractLayout handles any layout shifts of remaining siblings.
+
   const idx = parent.children.indexOf(child);
   if (idx !== -1) {
     parent.children.splice(idx, 1);
@@ -133,6 +248,11 @@ export function insertBefore(
   } else {
     parent.allChildren.push(child);
   }
+
+  yogaInsertBefore(parent, child, beforeChild);
+  markLayoutDirty();
+  // Same rationale as appendChild — don't eagerly dirty the parent.
+  // extractLayout handles any layout shifts from the insertion.
 }
 
 export function insertTextBefore(
@@ -155,6 +275,109 @@ export function insertTextBefore(
     parent.allChildren.push(child);
   }
   parent.text = parent.rawTextChildren.map((t) => t.text).join("");
+}
+
+// ── Yoga tree helpers ───────────────────────────────────────────
+// These mirror GlyphNode tree ops so the Yoga tree stays in sync
+// with the GlyphNode tree at all times.  Text/input nodes are Yoga
+// leaves (they have a measure function) so their children are never
+// added to the Yoga tree.
+
+/** Detach a Yoga node from its Yoga parent (if any). */
+function yogaDetach(node: GlyphNode): void {
+  if (!node.yogaNode) return;
+  const parent = node.yogaNode.getParent();
+  if (parent) parent.removeChild(node.yogaNode);
+}
+
+/** Append child's Yoga node to parent's Yoga node. */
+export function yogaAppendChild(parent: GlyphNode, child: GlyphNode): void {
+  if (!parent.yogaNode || !child.yogaNode) return;
+  if (parent.type === "text" || parent.type === "input") return;
+  yogaDetach(child);
+  parent.yogaNode.insertChild(child.yogaNode, parent.yogaNode.getChildCount());
+}
+
+/** Remove child's Yoga node from parent's Yoga node. */
+export function yogaRemoveChild(parent: GlyphNode, child: GlyphNode): void {
+  if (!parent.yogaNode || !child.yogaNode) return;
+  if (parent.type === "text" || parent.type === "input") return;
+  const currentParent = child.yogaNode.getParent();
+  if (currentParent) currentParent.removeChild(child.yogaNode);
+}
+
+/** Insert child's Yoga node before beforeChild's Yoga node in parent. */
+export function yogaInsertBefore(
+  parent: GlyphNode,
+  child: GlyphNode,
+  beforeChild: GlyphNode,
+): void {
+  if (!parent.yogaNode || !child.yogaNode || !beforeChild.yogaNode) return;
+  if (parent.type === "text" || parent.type === "input") return;
+  yogaDetach(child);
+
+  // NOTE: We cannot use `parent.yogaNode.getChild(i) === beforeChild.yogaNode`
+  // because yoga-layout's WASM bindings return a *new* JS wrapper object on
+  // every getChild() call, so `===` always fails.  Instead, derive the
+  // correct Yoga index from the GlyphNode children array — which has already
+  // been updated to the correct order by the caller (insertBefore in nodes.ts).
+  let idx = 0;
+  for (const sibling of parent.children) {
+    if (sibling === child) break; // child's position = the target index
+    if (sibling.yogaNode) idx++;
+  }
+  parent.yogaNode.insertChild(child.yogaNode, idx);
+}
+
+/**
+ * Free a single GlyphNode's Yoga node.
+ *
+ * Detaches from its Yoga parent, unsets any measure function, removes
+ * remaining Yoga children, then frees the WASM object.
+ *
+ * Safe to call when `yogaNode` is already `null` (no-op).
+ */
+export function freeYogaNode(node: GlyphNode): void {
+  if (!node.yogaNode) return;
+
+  yogaDetach(node);
+
+  // Unset measure function before freeing to release the JS closure
+  // reference in the WASM callback table.
+  if (node._hasMeasureFunc) {
+    node.yogaNode.unsetMeasureFunc();
+    node._hasMeasureFunc = false;
+  }
+
+  // Detach any remaining Yoga children so they don't hold a stale parent.
+  const yn = node.yogaNode;
+  while (yn.getChildCount() > 0) {
+    yn.removeChild(yn.getChild(0));
+  }
+
+  yn.free();
+  node.yogaNode = null;
+}
+
+/**
+ * Recursively free a GlyphNode subtree's Yoga nodes (bottom-up).
+ *
+ * React's `removeChild` is only called for *permanent* deletions (not
+ * moves/reorders).  By freeing the entire Yoga subtree synchronously
+ * during the mutation commit we avoid zombie WASM objects that linger
+ * between the mutation phase and React's passive-effects phase (where
+ * `detachDeletedInstance` would normally call `freeYogaNode`).
+ *
+ * When `detachDeletedInstance` fires later it finds `yogaNode === null`
+ * and harmlessly no-ops.
+ */
+export function freeYogaSubtree(node: GlyphNode): void {
+  // Free children first (bottom-up) so each child can safely
+  // detach itself from its Yoga parent while that parent is still alive.
+  for (const child of node.children) {
+    freeYogaSubtree(child);
+  }
+  freeYogaNode(node);
 }
 
 export function getInheritedTextStyle(node: GlyphNode): {

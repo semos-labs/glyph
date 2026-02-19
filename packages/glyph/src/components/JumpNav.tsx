@@ -160,7 +160,9 @@ export function JumpNav({
   
   const [isActive, setIsActive] = useState(false);
   const [inputBuffer, setInputBuffer] = useState("");
-  const [elements, setElements] = useState<TrackedElement[]>([]);
+  // Monotonically increasing counter — bumped on every activation to
+  // invalidate the useMemo below even when isActive is still true.
+  const [activationEpoch, setActivationEpoch] = useState(0);
   
   const inputCtx = useContext(InputContext);
   const focusCtx = useContext(FocusContext);
@@ -186,53 +188,41 @@ export function JumpNav({
 
   const activationKeyParsed = parseKey(activationKey);
 
-  // Refresh elements from the ACTIVE focus scope (trap-aware)
-  const refreshElements = useCallback(() => {
-    if (!focusCtx?.getActiveElements) {
-      log('refreshElements: no getActiveElements');
-      return;
-    }
-    
+  // Screen dimensions for boundary checks
+  const screenColumns = appCtx?.columns ?? 80;
+  const screenRows = appCtx?.rows ?? 24;
+
+  // Compute tracked elements synchronously during render (not in an
+  // effect).  Using useMemo guarantees the overlay's first paint already
+  // has the correct element list — the old useEffect approach deferred
+  // element discovery to AFTER the first paint, which meant the second
+  // activation rendered with stale / empty elements.
+  const elements = useMemo<TrackedElement[]>(() => {
+    if (!isActive || !focusCtx?.getActiveElements) return [];
+
     const active = focusCtx.getActiveElements();
     log('getActiveElements returned', active.length, 'elements');
 
-    const screenColumns = appCtx?.columns ?? 80;
-    const screenRows = appCtx?.rows ?? 24;
     const screenClip: ClipRect = { x: 0, y: 0, width: screenColumns, height: screenRows };
-    
+
     const mapped: TrackedElement[] = active.map(({ id, node }) => ({
       id,
       node,
       layout: layoutCtx?.getLayout(node) ?? node.layout,
       clipRegion: computeEffectiveClip(node, screenClip),
     }));
-    
+
     // Sort by visual position (top-to-bottom, left-to-right)
     mapped.sort((a, b) => {
-      if (a.layout.y !== b.layout.y) {
-        return a.layout.y - b.layout.y;
-      }
+      if (a.layout.y !== b.layout.y) return a.layout.y - b.layout.y;
       return a.layout.x - b.layout.x;
     });
-    
-    setElements(mapped);
-  }, [focusCtx, layoutCtx, appCtx, log]);
 
-  // Track previous isActive to detect activation transition
-  const wasActiveRef = useRef(false);
-  
-  // Refresh elements when activated
-  useEffect(() => {
-    if (isActive && !wasActiveRef.current) {
-      log('Activated! Refreshing elements...');
-      refreshElements();
-    }
-    wasActiveRef.current = isActive;
-  }, [isActive, refreshElements, log]);
-
-  // Screen dimensions for boundary checks
-  const screenColumns = appCtx?.columns ?? 80;
-  const screenRows = appCtx?.rows ?? 24;
+    return mapped;
+    // activationEpoch ensures a fresh snapshot every time JumpNav is
+    // toggled, even if isActive stays true between renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, activationEpoch, focusCtx, layoutCtx, screenColumns, screenRows]);
 
   // Filter elements: must have valid layout AND be within their clip region (ScrollView, screen, etc.)
   const visibleElements = elements.filter(el => 
@@ -275,6 +265,7 @@ export function JumpNav({
       ) {
         log('Activation key matched! Activating...');
         setIsActive(true);
+        setActivationEpoch(e => e + 1);
         setInputBuffer("");
         return true;
       }

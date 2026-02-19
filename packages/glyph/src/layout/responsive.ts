@@ -130,6 +130,28 @@ export function resolveStyle(
 }
 
 /**
+ * Fast shallow equality check for two ResolvedStyle objects.
+ *
+ * Compares all own properties with `===`.  Handles primitives (strings,
+ * numbers, booleans) perfectly; will return `false` for structurally
+ * equal `{ r, g, b }` objects — that's intentional to keep the check
+ * as fast as possible (one property access + strict equality per key).
+ */
+function resolvedStylesEqual(
+  a: ResolvedStyle,
+  b: ResolvedStyle,
+): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (let i = 0; i < aKeys.length; i++) {
+    const k = aKeys[i]!;
+    if ((a as any)[k] !== (b as any)[k]) return false;
+  }
+  return true;
+}
+
+/**
  * Walk a node tree and populate each node's `resolvedStyle` from its
  * `style`, collapsing any responsive values for the current terminal size.
  *
@@ -145,7 +167,21 @@ export function resolveNodeStyles(
   rows: number,
 ): void {
   for (const node of nodes) {
-    node.resolvedStyle = resolveStyle(node.style, columns, rows);
+    // Cache: skip re-resolution when the style reference and terminal
+    // columns haven't changed.  Works because commitUpdate() in
+    // hostConfig replaces node.style by reference on every prop change.
+    if (node.style !== node._lastStyleRef || columns !== node._lastColumns) {
+      const newResolved = resolveStyle(node.style, columns, rows);
+      // Preserve old reference when resolved VALUES are identical.
+      // React re-renders often give new style objects with the same values.
+      // Keeping the reference stable cascades through the whole pipeline:
+      //   syncYogaStyles skips WASM calls, text cache hits, etc.
+      if (!resolvedStylesEqual(node.resolvedStyle, newResolved)) {
+        node.resolvedStyle = newResolved;
+      }
+      node._lastStyleRef = node.style;
+      node._lastColumns = columns;
+    }
     resolveNodeStyles(node.children, columns, rows);
   }
 }

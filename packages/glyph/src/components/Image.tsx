@@ -210,11 +210,21 @@ export const Image = forwardRef<ImageHandle, ImageProps>(
     });
   }, [focusCtx, nodeReady]);
 
-  // Subscribe to layout changes
+  // Subscribe to layout changes (only update state when values actually change)
   useEffect(() => {
     if (!layoutCtx || !nodeRef.current) return;
     setLayout(layoutCtx.getLayout(nodeRef.current));
-    return layoutCtx.subscribe(nodeRef.current, setLayout);
+    return layoutCtx.subscribe(nodeRef.current, (rect) => {
+      setLayout((prev) => {
+        if (prev && prev.x === rect.x && prev.y === rect.y &&
+            prev.width === rect.width && prev.height === rect.height &&
+            prev.innerX === rect.innerX && prev.innerY === rect.innerY &&
+            prev.innerWidth === rect.innerWidth && prev.innerHeight === rect.innerHeight) {
+          return prev;
+        }
+        return rect;
+      });
+    });
   }, [layoutCtx, nodeReady]);
 
   // Track scroll position and hide image when user scrolls

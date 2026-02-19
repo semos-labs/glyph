@@ -35,6 +35,19 @@
         "typescript": "^5.5",
       },
     },
+    "examples/benchmark": {
+      "name": "benchmark",
+      "dependencies": {
+        "@semos-labs/glyph": "workspace:*",
+        "react": "^19.0.0",
+      },
+      "devDependencies": {
+        "@types/node": "^20",
+        "@types/react": "^19",
+        "tsx": "^4",
+        "typescript": "^5.5",
+      },
+    },
     "examples/dashboard": {
       "name": "dashboard",
       "dependencies": {
@@ -240,7 +253,7 @@
     },
     "packages/create-glyph": {
       "name": "@semos-labs/create-glyph",
-      "version": "0.1.91",
+      "version": "0.1.97",
       "bin": {
         "create-glyph": "./dist/index.js",
       },
@@ -252,7 +265,7 @@
     },
     "packages/glyph": {
       "name": "@semos-labs/glyph",
-      "version": "0.1.91",
+      "version": "0.1.97",
       "dependencies": {
         "react-reconciler": "^0.31.0",
         "string-width": "^7.2.0",
@@ -423,6 +436,8 @@
     "balanced-match": ["balanced-match@1.0.2", "", {}, "sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw=="],
 
     "basic-layout": ["basic-layout@workspace:examples/basic-layout"],
+
+    "benchmark": ["benchmark@workspace:examples/benchmark"],
 
     "brace-expansion": ["brace-expansion@2.0.2", "", { "dependencies": { "balanced-match": "^1.0.0" } }, "sha512-Jt0vHyM+jmUBqojB7E1NIYadt0vI0Qxjxd2TErW94wDz+E2LAm5vKMXXwg6ZZBTHPuUlDgQHKXvjGBdfcF1ZDQ=="],
 

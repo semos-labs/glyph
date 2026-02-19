@@ -300,9 +300,9 @@ export const Input = forwardRef<InputHandle, InputProps>(
   useEffect(() => {
     if (!layoutCtx || !nodeRef.current) return;
     const layout = layoutCtx.getLayout(nodeRef.current);
-    setInnerWidth(layout.innerWidth);
+    setInnerWidth((prev) => prev === layout.innerWidth ? prev : layout.innerWidth);
     return layoutCtx.subscribe(nodeRef.current, (rect) => {
-      setInnerWidth(rect.innerWidth);
+      setInnerWidth((prev) => prev === rect.innerWidth ? prev : rect.innerWidth);
     });
   }, [layoutCtx]);
 

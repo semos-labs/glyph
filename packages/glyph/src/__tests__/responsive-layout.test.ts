@@ -1,8 +1,28 @@
 import { test, expect, describe } from "bun:test";
 import { createGlyphNode, appendChild } from "../reconciler/nodes.js";
-import { computeLayout } from "../layout/yogaLayout.js";
+import { computeLayout, createRootYogaNode } from "../layout/yogaLayout.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 import type { Style } from "../types/index.js";
+
+/** Run computeLayout with an ephemeral root Yoga node (for tests). */
+function computeWithRoot(roots: GlyphNode[], cols: number, rows: number) {
+  const rootYoga = createRootYogaNode();
+  // Wire root-level GlyphNodes into the ephemeral root Yoga node
+  // (in production, appendChildToContainer handles this)
+  for (const root of roots) {
+    if (root.yogaNode) {
+      const prev = root.yogaNode.getParent();
+      if (prev) prev.removeChild(root.yogaNode);
+      rootYoga.insertChild(root.yogaNode, rootYoga.getChildCount());
+    }
+  }
+  computeLayout(roots, cols, rows, rootYoga, true);
+  // Detach children before freeing so persistent GlyphNode.yogaNodes survive
+  while (rootYoga.getChildCount() > 0) {
+    rootYoga.removeChild(rootYoga.getChild(0));
+  }
+  rootYoga.free();
+}
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -170,7 +190,7 @@ function buildExampleTree(cols: number, _rows: number) {
 
 function layout(cols: number, rows: number) {
   const tree = buildExampleTree(cols, rows);
-  computeLayout([tree.root], cols, rows);
+  computeWithRoot([tree.root], cols, rows);
   return tree;
 }
 
@@ -433,10 +453,10 @@ describe("screen resize — stale tree safety (pre-React-reconcile)", () => {
 
   test("xl tree re-laid-out at sm: no crash, root fills screen", () => {
     const tree = buildExampleTree(160, 24);
-    computeLayout([tree.root], 160, 24);
+    computeWithRoot([tree.root], 160, 24);
 
     // Simulate resize without rebuilding tree
-    computeLayout([tree.root], 40, 24);
+    computeWithRoot([tree.root], 40, 24);
 
     expect(tree.root.layout.width).toBe(40);
     expect(tree.root.layout.height).toBe(24);
@@ -444,9 +464,9 @@ describe("screen resize — stale tree safety (pre-React-reconcile)", () => {
 
   test("sm tree re-laid-out at xl: no crash, root fills screen", () => {
     const tree = buildExampleTree(40, 24);
-    computeLayout([tree.root], 40, 24);
+    computeWithRoot([tree.root], 40, 24);
 
-    computeLayout([tree.root], 160, 24);
+    computeWithRoot([tree.root], 160, 24);
 
     expect(tree.root.layout.width).toBe(160);
     expect(tree.root.layout.height).toBe(24);
@@ -454,9 +474,9 @@ describe("screen resize — stale tree safety (pre-React-reconcile)", () => {
 
   test("lg tree re-laid-out at sm: no crash, root fills screen", () => {
     const tree = buildExampleTree(120, 24);
-    computeLayout([tree.root], 120, 24);
+    computeWithRoot([tree.root], 120, 24);
 
-    computeLayout([tree.root], 40, 24);
+    computeWithRoot([tree.root], 40, 24);
 
     expect(tree.root.layout.width).toBe(40);
     expect(tree.root.layout.height).toBe(24);
@@ -465,17 +485,17 @@ describe("screen resize — stale tree safety (pre-React-reconcile)", () => {
   test("stale xl→sm overflow is fixed after fresh rebuild", () => {
     // Build xl tree (includes QuickStats, metrics rows)
     const xlTree = buildExampleTree(160, 24);
-    computeLayout([xlTree.root], 160, 24);
+    computeWithRoot([xlTree.root], 160, 24);
 
     // Stale layout at sm — may have overflow from xl-only subtrees
     // (e.g. QuickStats row, metrics rows that are wider than 40 cols)
-    computeLayout([xlTree.root], 40, 24);
+    computeWithRoot([xlTree.root], 40, 24);
     const staleErrors = horizontalOverflows(xlTree.root, 40);
     // Overflow here is expected — it's the race condition
 
     // Fresh rebuild at sm eliminates the overflow
     const smTree = buildExampleTree(40, 24);
-    computeLayout([smTree.root], 40, 24);
+    computeWithRoot([smTree.root], 40, 24);
     expect(horizontalOverflows(smTree.root, 40)).toEqual([]);
 
     // Verify the stale state *did* have overflow (if it doesn't, that's
@@ -488,11 +508,11 @@ describe("screen resize — stale tree safety (pre-React-reconcile)", () => {
   test("stale sm→xl: missing nodes don't cause layout to crash", () => {
     // sm tree has NO QuickStats and fewer events
     const smTree = buildExampleTree(40, 24);
-    computeLayout([smTree.root], 40, 24);
+    computeWithRoot([smTree.root], 40, 24);
     expect(smTree.quickStats).toBeNull();
 
     // Re-layout at xl — QuickStats is still null, but layout shouldn't crash
-    computeLayout([smTree.root], 160, 24);
+    computeWithRoot([smTree.root], 160, 24);
 
     expect(smTree.root.layout.width).toBe(160);
     // Event log should pick up responsive width: 32 (md breakpoint applies)
@@ -516,7 +536,7 @@ describe("screen resize — stale tree safety (pre-React-reconcile)", () => {
     ];
 
     for (const [cols, rows] of sizes) {
-      computeLayout([tree.root], cols, rows);
+      computeWithRoot([tree.root], cols, rows);
       expect(tree.root.layout.width).toBe(cols);
       expect(tree.root.layout.height).toBe(rows);
     }
@@ -545,12 +565,12 @@ describe("screen resize — breakpoint boundaries", () => {
 
   test("79 → 80 cols: service card metrics appear", () => {
     const before = buildExampleTree(79, 30);
-    computeLayout([before.root], 79, 30);
+    computeWithRoot([before.root], 79, 30);
     // At 79: no metrics rows → card has 1 child (name row only)
     const cardChildren79 = before.cards[0]!.children.length;
 
     const after = buildExampleTree(80, 30);
-    computeLayout([after.root], 80, 30);
+    computeWithRoot([after.root], 80, 30);
     // At 80: metrics row added → card has 2 children
     const cardChildren80 = after.cards[0]!.children.length;
 
@@ -583,10 +603,10 @@ describe("screen resize — idempotency & round-trips", () => {
   test("computing layout twice at the same size yields identical results", () => {
     const tree = buildExampleTree(120, 24);
 
-    computeLayout([tree.root], 120, 24);
+    computeWithRoot([tree.root], 120, 24);
     const first = captureAllLayouts(tree.root);
 
-    computeLayout([tree.root], 120, 24);
+    computeWithRoot([tree.root], 120, 24);
     const second = captureAllLayouts(tree.root);
 
     expect(first).toEqual(second);
@@ -595,7 +615,7 @@ describe("screen resize — idempotency & round-trips", () => {
   test("A → B → A round-trip produces identical layout", () => {
     // First render at A
     const treeA1 = buildExampleTree(120, 24);
-    computeLayout([treeA1.root], 120, 24);
+    computeWithRoot([treeA1.root], 120, 24);
     const layoutA1 = captureAllLayouts(treeA1.root);
 
     // Render at B
@@ -603,7 +623,7 @@ describe("screen resize — idempotency & round-trips", () => {
 
     // Back to A (fresh tree, same dimensions)
     const treeA2 = buildExampleTree(120, 24);
-    computeLayout([treeA2.root], 120, 24);
+    computeWithRoot([treeA2.root], 120, 24);
     const layoutA2 = captureAllLayouts(treeA2.root);
 
     expect(layoutA1).toEqual(layoutA2);
@@ -611,14 +631,14 @@ describe("screen resize — idempotency & round-trips", () => {
 
   test("A → B → C → A round-trip through multiple sizes", () => {
     const treeA = buildExampleTree(160, 24);
-    computeLayout([treeA.root], 160, 24);
+    computeWithRoot([treeA.root], 160, 24);
     const layoutA = captureAllLayouts(treeA.root);
 
     layout(40, 24);
     layout(80, 30);
 
     const treeA2 = buildExampleTree(160, 24);
-    computeLayout([treeA2.root], 160, 24);
+    computeWithRoot([treeA2.root], 160, 24);
     const layoutA2 = captureAllLayouts(treeA2.root);
 
     expect(layoutA).toEqual(layoutA2);

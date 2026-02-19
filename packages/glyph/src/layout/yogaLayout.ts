@@ -10,10 +10,12 @@ import Yoga, {
   Overflow,
 } from "yoga-layout";
 import type { Node as YogaNode } from "yoga-layout";
-import type { GlyphNode, GlyphContainer } from "../reconciler/nodes.js";
+import type { GlyphNode } from "../reconciler/nodes.js";
+import { isLayoutDirty, resetLayoutDirty, pendingStaleRects } from "../reconciler/nodes.js";
 import type { ResolvedStyle, DimensionValue } from "../types/index.js";
 import { measureText } from "./textMeasure.js";
 import { resolveNodeStyles } from "./responsive.js";
+import { framePerf as perf } from "../perf.js";
 
 const FLEX_DIR_MAP: Record<string, FlexDirection> = {
   row: FlexDirection.Row,
@@ -34,6 +36,8 @@ const ALIGN_MAP: Record<string, Align> = {
   "flex-end": Align.FlexEnd,
   stretch: Align.Stretch,
 };
+
+// ── Style helpers ───────────────────────────────────────────────
 
 function setDimension(
   node: YogaNode,
@@ -61,7 +65,49 @@ function setPosition(
   }
 }
 
+function resetYogaNode(yogaNode: YogaNode): void {
+  // Reset all layout properties to Yoga defaults so that stale values
+  // from a previously applied style don't leak when React reuses a host
+  // node via commitUpdate (e.g. switching between detail/list views).
+  yogaNode.setWidth("auto" as any);
+  yogaNode.setHeight("auto" as any);
+  yogaNode.setMinWidth(NaN);    // NaN = "unset" in Yoga
+  yogaNode.setMinHeight(NaN);
+  yogaNode.setMaxWidth(NaN);
+  yogaNode.setMaxHeight(NaN);
+
+  yogaNode.setPadding(Edge.All, 0);
+  yogaNode.setPadding(Edge.Horizontal, NaN);
+  yogaNode.setPadding(Edge.Vertical, NaN);
+  yogaNode.setPadding(Edge.Top, NaN);
+  yogaNode.setPadding(Edge.Right, NaN);
+  yogaNode.setPadding(Edge.Bottom, NaN);
+  yogaNode.setPadding(Edge.Left, NaN);
+
+  yogaNode.setBorder(Edge.All, 0);
+
+  yogaNode.setFlexDirection(FlexDirection.Column);
+  yogaNode.setFlexWrap(Wrap.NoWrap);
+  yogaNode.setJustifyContent(Justify.FlexStart);
+  yogaNode.setAlignItems(Align.Stretch);
+  yogaNode.setFlexGrow(0);
+  yogaNode.setFlexShrink(0);
+
+  yogaNode.setGap(Gutter.All, 0);
+
+  yogaNode.setPositionType(PositionType.Relative);
+  yogaNode.setPosition(Edge.Top, NaN);
+  yogaNode.setPosition(Edge.Right, NaN);
+  yogaNode.setPosition(Edge.Bottom, NaN);
+  yogaNode.setPosition(Edge.Left, NaN);
+
+  yogaNode.setOverflow(Overflow.Visible);
+}
+
 function applyStyleToYogaNode(yogaNode: YogaNode, style: ResolvedStyle, nodeType: string): void {
+  // Reset all properties first to clear stale values from previous styles.
+  resetYogaNode(yogaNode);
+
   // Dimensions
   setDimension(yogaNode, (v) => yogaNode.setWidth(v as any), style.width);
   setDimension(yogaNode, (v) => yogaNode.setHeight(v as any), style.height);
@@ -129,38 +175,10 @@ function applyStyleToYogaNode(yogaNode: YogaNode, style: ResolvedStyle, nodeType
   }
 }
 
-function buildYogaTree(node: GlyphNode): void {
-  const yogaNode = Yoga.Node.create();
-  node.yogaNode = yogaNode;
-
-  applyStyleToYogaNode(yogaNode, node.resolvedStyle, node.type);
-
-  if (node.type === "text" || node.type === "input") {
-    yogaNode.setMeasureFunc((width, widthMode, height, heightMode) => {
-      let text: string;
-      if (node.type === "input") {
-        text = node.props.value ?? node.props.defaultValue ?? node.props.placeholder ?? "";
-        if (text.length === 0) text = " ";
-      } else {
-        text = collectAllText(node);
-      }
-      return measureText(
-        text,
-        width,
-        widthMode,
-        node.resolvedStyle.wrap ?? "wrap",
-      );
-    });
-  } else {
-    // Build children
-    for (let i = 0; i < node.children.length; i++) {
-      const child = node.children[i]!;
-      if (child.hidden) continue;
-      buildYogaTree(child);
-      yogaNode.insertChild(child.yogaNode!, yogaNode.getChildCount());
-    }
-  }
-}
+// ── Style sync ──────────────────────────────────────────────────
+// The Yoga tree STRUCTURE is managed by the reconciler (appendChild,
+// removeChild, insertBefore in nodes.ts + hostConfig.ts).  Each
+// frame we only need to sync STYLES and install measure functions.
 
 function collectAllText(node: GlyphNode): string {
   if (node.text != null) return node.text;
@@ -175,89 +193,323 @@ function collectAllText(node: GlyphNode): string {
   return result;
 }
 
-function extractLayout(node: GlyphNode, parentX: number, parentY: number): void {
+/**
+ * Walk the tree and sync styles + measure functions.  No structural
+ * changes — the reconciler keeps the Yoga tree in sync.
+ */
+function syncYogaStyles(nodes: GlyphNode[]): boolean {
+  let anyChanged = false;
+  for (const node of nodes) {
+    if (node.hidden || !node.yogaNode) continue;
+
+    // Apply styles only when resolvedStyle reference changed
+    if (node.resolvedStyle !== node._lastYogaStyle) {
+      applyStyleToYogaNode(node.yogaNode, node.resolvedStyle, node.type);
+      node._lastYogaStyle = node.resolvedStyle;
+      anyChanged = true;
+    }
+
+    // Install measure function once for text/input leaf nodes
+    if (!node._hasMeasureFunc && (node.type === "text" || node.type === "input")) {
+      node.yogaNode.setMeasureFunc((width, widthMode, _height, _heightMode) => {
+        let text: string;
+        if (node.type === "input") {
+          text = node.props.value ?? node.props.defaultValue ?? node.props.placeholder ?? "";
+          if (text.length === 0) text = " ";
+        } else {
+          text = collectAllText(node);
+        }
+        return measureText(
+          text,
+          width,
+          widthMode,
+          node.resolvedStyle.wrap ?? "wrap",
+        );
+      });
+      node._hasMeasureFunc = true;
+      anyChanged = true;
+    }
+
+    // Recurse into children
+    if (node.type !== "text" && node.type !== "input") {
+      if (syncYogaStyles(node.children)) anyChanged = true;
+    }
+  }
+  return anyChanged;
+}
+
+/** Clip rect passed through extractLayout to cull off-screen subtrees. */
+interface LayoutClip { minX: number; minY: number; maxX: number; maxY: number }
+
+/** Mark all Yoga nodes in a subtree as layout-seen (resets hasNewLayout). */
+function markSubtreeLayoutSeen(node: GlyphNode): void {
+  for (const child of node.children) {
+    if (!child.yogaNode) continue;
+    if (child.yogaNode.hasNewLayout()) child.yogaNode.markLayoutSeen();
+    markSubtreeLayoutSeen(child);
+  }
+}
+
+function extractLayout(
+  node: GlyphNode,
+  parentX: number,
+  parentY: number,
+  parentMoved: boolean,
+  clip: LayoutClip | null,
+): void {
   const yn = node.yogaNode!;
-  const computedLayout = yn.getComputedLayout();
+  const hasNew = yn.hasNewLayout();
 
-  const x = parentX + computedLayout.left;
-  const y = parentY + computedLayout.top;
-  const width = computedLayout.width;
-  const height = computedLayout.height;
+  // Fast path: Yoga didn't recalculate this node AND parent didn't move.
+  if (!hasNew && !parentMoved) {
+    for (const child of node.children) {
+      if (child.hidden || !child.yogaNode) continue;
+      extractLayout(child, node.layout!.x, node.layout!.y, false, clip);
+    }
+    return;
+  }
 
-  const borderWidth = node.resolvedStyle.border && node.resolvedStyle.border !== "none" ? 1 : 0;
-  const paddingTop = yn.getComputedPadding(Edge.Top);
-  const paddingRight = yn.getComputedPadding(Edge.Right);
-  const paddingBottom = yn.getComputedPadding(Edge.Bottom);
-  const paddingLeft = yn.getComputedPadding(Edge.Left);
+  if (hasNew) yn.markLayoutSeen();
 
-  const innerX = x + borderWidth + paddingLeft;
-  const innerY = y + borderWidth + paddingTop;
-  const innerWidth = Math.max(0, width - borderWidth * 2 - paddingLeft - paddingRight);
-  const innerHeight = Math.max(0, height - borderWidth * 2 - paddingTop - paddingBottom);
+  // ── Step 1: Determine absolute position ──
+  // Always read position + dimensions from Yoga.  Previously the
+  // parentMoved-only branch used cached _relLeft/_relTop, but Yoga
+  // doesn't always set hasNewLayout for newly-inserted children whose
+  // computed values happen to match Yoga's initial defaults.  Those
+  // nodes enter the else branch with stale _relLeft/_relTop = 0,
+  // causing all virtualized items to stack at the parent's origin
+  // (only item 0 appears correct because its actual offset IS 0).
+  // Reading from Yoga unconditionally costs two extra WASM reads per
+  // parentMoved node but is negligible in practice (~20 nodes per
+  // scroll tick) and eliminates the stale-offset class of bugs.
+  const cl = yn.getComputedLayout();
+  const x = parentX + cl.left;
+  const y = parentY + cl.top;
+  const width = cl.width;
+  const height = cl.height;
+  node._relLeft = cl.left;
+  node._relTop = cl.top;
 
-  // Only create new layout object if values actually changed (prevents infinite re-renders)
-  const prev = node.layout;
-  if (!prev || 
-      prev.x !== x || prev.y !== y || 
-      prev.width !== width || prev.height !== height ||
-      prev.innerX !== innerX || prev.innerY !== innerY ||
-      prev.innerWidth !== innerWidth || prev.innerHeight !== innerHeight) {
-    node.layout = { x, y, width, height, innerX, innerY, innerWidth, innerHeight };
+  // ── Step 2: Clip cull ──
+  if (clip &&
+      (y + height <= clip.minY || y >= clip.maxY ||
+       x + width  <= clip.minX || x >= clip.maxX)) {
+    const prev = node.layout;
+    if (prev && (prev.x !== x || prev.y !== y || prev.width !== width || prev.height !== height)) {
+      const dx = x - prev.x;
+      const dy = y - prev.y;
+      const dw = width - prev.width;
+      const dh = height - prev.height;
+      node._prevLayout = prev;
+
+      if (dw !== 0 || dh !== 0) {
+        const bw = node.resolvedStyle.border && node.resolvedStyle.border !== "none" ? 1 : 0;
+        const padTop = yn.getComputedPadding(Edge.Top);
+        const padRight = yn.getComputedPadding(Edge.Right);
+        const padBottom = yn.getComputedPadding(Edge.Bottom);
+        const padLeft = yn.getComputedPadding(Edge.Left);
+
+        node.layout = {
+          x, y, width, height,
+          innerX: x + bw + padLeft,
+          innerY: y + bw + padTop,
+          innerWidth: Math.max(0, width - bw * 2 - padLeft - padRight),
+          innerHeight: Math.max(0, height - bw * 2 - padTop - padBottom),
+        };
+      } else {
+        node.layout = {
+          x, y, width, height,
+          innerX: prev.innerX + dx,
+          innerY: prev.innerY + dy,
+          innerWidth: prev.innerWidth,
+          innerHeight: prev.innerHeight,
+        };
+      }
+
+      node._paintDirty = true;
+    }
+    if (hasNew) markSubtreeLayoutSeen(node);
+    return;
+  }
+
+  // ── Step 3: Full layout extraction ──
+  let layoutChanged = false;
+
+  if (hasNew) {
+    const bw = node.resolvedStyle.border && node.resolvedStyle.border !== "none" ? 1 : 0;
+    const padTop = yn.getComputedPadding(Edge.Top);
+    const padRight = yn.getComputedPadding(Edge.Right);
+    const padBottom = yn.getComputedPadding(Edge.Bottom);
+    const padLeft = yn.getComputedPadding(Edge.Left);
+
+    const innerX = x + bw + padLeft;
+    const innerY = y + bw + padTop;
+    const innerWidth = Math.max(0, width - bw * 2 - padLeft - padRight);
+    const innerHeight = Math.max(0, height - bw * 2 - padTop - padBottom);
+
+    const prev = node.layout;
+    if (!prev ||
+        prev.x !== x || prev.y !== y ||
+        prev.width !== width || prev.height !== height ||
+        prev.innerX !== innerX || prev.innerY !== innerY ||
+        prev.innerWidth !== innerWidth || prev.innerHeight !== innerHeight) {
+      // For absolute-positioned nodes that moved/resized, the old area may
+      // cover content from nodes underneath that won't be dirty.  Push the
+      // old rect as a stale rect so Pass 0 clears it and marks underlying
+      // entries dirty for repaint (e.g. Select dropdown shrinking on filter).
+      //
+      // SKIP when inside a clip container (clip != null): the viewport fill
+      // already clears the entire clipped area every frame, and the clip
+      // prevents the node from painting outside it.  Pushing stale rects
+      // for the ScrollView inner content box (which moves on EVERY scroll)
+      // would force a full-viewport repaint of ALL overlapping entries
+      // (sidebar, toolbar, etc.) — wasteful and can cause flicker.
+      if (!clip && prev && prev.width > 0 && prev.height > 0 &&
+          node.resolvedStyle.position === "absolute") {
+        pendingStaleRects.push({ x: prev.x, y: prev.y, width: prev.width, height: prev.height });
+      }
+      node._prevLayout = prev;
+      node.layout = { x, y, width, height, innerX, innerY, innerWidth, innerHeight };
+      node._paintDirty = true;
+      layoutChanged = true;
+    }
+  } else {
+    const prev = node.layout!;
+    const dx = x - prev.x;
+    const dy = y - prev.y;
+    const dw = width - prev.width;
+    const dh = height - prev.height;
+    if (dx !== 0 || dy !== 0 || dw !== 0 || dh !== 0) {
+      // Same absolute-overlay stale rect logic as the hasNew branch above.
+      if (!clip && prev.width > 0 && prev.height > 0 &&
+          node.resolvedStyle.position === "absolute") {
+        pendingStaleRects.push({ x: prev.x, y: prev.y, width: prev.width, height: prev.height });
+      }
+      node._prevLayout = prev;
+
+      // When only position changed (dx/dy), inner dimensions stay the same
+      // — just shift innerX/innerY by the delta.
+      //
+      // When width or height changed (dw/dh), we MUST do a full inner
+      // computation from Yoga.  The delta approach (prev.innerWidth + dw)
+      // is only valid if prev was previously computed from the hasNew path.
+      // Nodes that have NEVER been fully extracted (e.g. brand new nodes
+      // entering the parentMoved path) have prev.inner* = 0 and the delta
+      // incorrectly gives innerWidth = width, ignoring padding/border.
+      if (dw !== 0 || dh !== 0) {
+        const bw = node.resolvedStyle.border && node.resolvedStyle.border !== "none" ? 1 : 0;
+        const padTop = yn.getComputedPadding(Edge.Top);
+        const padRight = yn.getComputedPadding(Edge.Right);
+        const padBottom = yn.getComputedPadding(Edge.Bottom);
+        const padLeft = yn.getComputedPadding(Edge.Left);
+
+        node.layout = {
+          x, y, width, height,
+          innerX: x + bw + padLeft,
+          innerY: y + bw + padTop,
+          innerWidth: Math.max(0, width - bw * 2 - padLeft - padRight),
+          innerHeight: Math.max(0, height - bw * 2 - padTop - padBottom),
+        };
+      } else {
+        node.layout = {
+          x, y, width, height,
+          innerX: prev.innerX + dx,
+          innerY: prev.innerY + dy,
+          innerWidth: prev.innerWidth,
+          innerHeight: prev.innerHeight,
+        };
+      }
+
+      node._paintDirty = true;
+      layoutChanged = true;
+    }
+  }
+
+  // ── Step 4: Compute child clip and recurse ──
+  let childClip = clip;
+  if (node.resolvedStyle.clip && node.layout) {
+    const l = node.layout;
+    const nc: LayoutClip = { minX: l.x, minY: l.y, maxX: l.x + l.width, maxY: l.y + l.height };
+    if (nc.maxX > nc.minX && nc.maxY > nc.minY) {
+      childClip = clip
+        ? { minX: Math.max(clip.minX, nc.minX), minY: Math.max(clip.minY, nc.minY),
+            maxX: Math.min(clip.maxX, nc.maxX), maxY: Math.min(clip.maxY, nc.maxY) }
+        : nc;
+    }
   }
 
   for (const child of node.children) {
     if (child.hidden || !child.yogaNode) continue;
-    extractLayout(child, x, y);
+    extractLayout(child, node.layout!.x, node.layout!.y, layoutChanged, childClip);
   }
 }
 
-function freeYogaTree(node: GlyphNode): void {
-  for (const child of node.children) {
-    if (child.yogaNode) freeYogaTree(child);
-  }
-  if (node.yogaNode) {
-    node.yogaNode.freeRecursive();
-    node.yogaNode = null;
-  }
+
+// ── Public API ──────────────────────────────────────────────────
+
+/** Create the persistent root Yoga node for the terminal screen. */
+export function createRootYogaNode(): YogaNode {
+  const node = Yoga.Node.create();
+  node.setFlexDirection(FlexDirection.Column);
+  return node;
 }
 
+/**
+ * Compute layout for the entire tree using persistent Yoga nodes.
+ *
+ * @param roots - Top-level GlyphNodes.
+ * @param screenWidth - Terminal width in columns.
+ * @param screenHeight - Terminal height in rows.
+ * @param rootYoga - Persistent root Yoga node (screen container).
+ * @param force - Force recalculation (e.g. on resize).
+ * @returns `true` if Yoga `calculateLayout` actually ran.
+ */
 export function computeLayout(
   roots: GlyphNode[],
   screenWidth: number,
   screenHeight: number,
-): void {
-  // Resolve responsive style values for the current terminal dimensions
-  resolveNodeStyles(roots, screenWidth, screenHeight);
+  rootYoga: YogaNode,
+  force = false,
+): boolean {
+  // Fast path: nothing could have changed — skip all tree walks.
+  // Safe because:
+  //  • resize / init  → force = true
+  //  • style change   → markLayoutDirty() from commitUpdate
+  //  • text measure   → markLayoutDirty() from commitTextUpdate
+  //  • structural     → force = true (via fullRepaint)
+  //  • new nodes      → force = true (structural change)
+  if (!force && !isLayoutDirty()) {
+    return false;
+  }
 
-  // Create a virtual root Yoga node for the screen
-  const rootYoga = Yoga.Node.create();
+  // 1. Resolve responsive style values for the current terminal dimensions
+  const t0 = performance.now();
+  resolveNodeStyles(roots, screenWidth, screenHeight);
+  perf.resolveStyles = performance.now() - t0;
+
+  // 2. Sync changed styles + measure funcs (structure managed by reconciler)
+  const t1 = performance.now();
+  syncYogaStyles(roots);
+  perf.syncYogaStyles = performance.now() - t1;
+
+  // 3. Update root dimensions and calculate layout
+  const t2 = performance.now();
   rootYoga.setWidth(screenWidth);
   rootYoga.setHeight(screenHeight);
-  rootYoga.setFlexDirection(FlexDirection.Column);
-
-  for (const child of roots) {
-    if (child.hidden) continue;
-    buildYogaTree(child);
-    rootYoga.insertChild(child.yogaNode!, rootYoga.getChildCount());
-  }
-
   rootYoga.calculateLayout(screenWidth, screenHeight, Direction.LTR);
+  perf.yogaCalculate = performance.now() - t2;
 
+  // 4. Extract computed layout into GlyphNodes
+  // Start with no clip — only nodes with clip:true (ScrollView etc.) will
+  // create clip rects for their children.  Root-level overflow must still
+  // get valid layout for tests, scrolling math, etc.
+  const t3 = performance.now();
   for (const child of roots) {
     if (child.hidden || !child.yogaNode) continue;
-    extractLayout(child, 0, 0);
+    extractLayout(child, 0, 0, force, null);
   }
+  perf.extractLayout = performance.now() - t3;
 
-  // Free yoga tree
-  rootYoga.freeRecursive();
-
-  // Clear references (they were freed)
-  clearYogaRefs(roots);
-}
-
-function clearYogaRefs(nodes: GlyphNode[]): void {
-  for (const node of nodes) {
-    node.yogaNode = null;
-    clearYogaRefs(node.children);
-  }
+  resetLayoutDirty();
+  return true;
 }

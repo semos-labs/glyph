@@ -8,7 +8,8 @@ import { parseKeySequence } from "./runtime/input.js";
 import { Framebuffer } from "./paint/framebuffer.js";
 import { paintTree } from "./paint/painter.js";
 import { diffFramebuffers } from "./paint/diff.js";
-import { computeLayout } from "./layout/yogaLayout.js";
+import type { CursorState } from "./paint/diff.js";
+import { computeLayout, createRootYogaNode } from "./layout/yogaLayout.js";
 import { setTerminalPalette, getContrastCursorColor } from "./paint/color.js";
 import {
   InputContext,
@@ -31,6 +32,7 @@ import type {
 } from "./hooks/context.js";
 import { renderImageEscapeSequence } from "./runtime/imageProtocol.js";
 import type { RenderOptions, AppHandle, LayoutRect } from "./types/index.js";
+import { resetFramePerf, flushFramePerf, initPerfLog, framePerf as perf } from "./perf.js";
 
 /**
  * Mount a React element into the terminal and start the render loop.
@@ -71,8 +73,14 @@ export function render(
   const terminal = new Terminal(stdout, stdin);
   terminal.setup();
 
-  // Track whether native cursor is currently visible
+  // Initialize frame profiler (writes to /tmp/glyph-profile.log)
+  if (debug) initPerfLog();
+
+  // Track native cursor state to avoid redundant escape sequences
   let nativeCursorVisible = false;
+  let lastCursorX = -1;
+  let lastCursorY = -1;
+  let lastCursorColor = "";
 
   // Query terminal for actual ANSI palette colors (async, repaint when done)
   terminal.queryPalette().then((palette) => {
@@ -84,6 +92,10 @@ export function render(
   const prevFb = new Framebuffer(terminal.columns, terminal.rows);
   const currentFb = new Framebuffer(terminal.columns, terminal.rows);
   let fullRedraw = true;
+  let lastFrameTime = 0;
+  let frameTiming: import("./hooks/context.js").FrameTiming = {
+    total: 0, layout: 0, paint: 0, diff: 0, swap: 0,
+  };
 
   // ---- Input system ----
   const inputHandlers = new Set<InputHandler>();
@@ -361,15 +373,24 @@ export function render(
         resizeHandlers.add(handler);
         return () => { resizeHandlers.delete(handler); };
       },
+      get lastFrameTime() {
+        return lastFrameTime;
+      },
+      get frameTiming() {
+        return frameTiming;
+      },
+      debug,
     };
 
     // ---- Container ----
+    const rootYogaNode = createRootYogaNode();
     const container: GlyphContainer = {
       type: "root",
       children: [],
       onCommit() {
         scheduleRender();
       },
+      yogaNode: rootYogaNode,
     };
 
     // ---- Render scheduling ----
@@ -385,6 +406,8 @@ export function render(
     }
 
     function performRender(): void {
+      if (debug) resetFramePerf();
+      const t0 = performance.now();
       const cols = terminal.columns;
       const rows = terminal.rows;
 
@@ -394,11 +417,21 @@ export function render(
         fullRedraw = true;
       }
 
-      // Compute layout (includes responsive style resolution)
-      computeLayout(container.children, cols, rows);
+      // fullRedraw  = clear terminal screen (resize / init only)
+      // fullRepaint = repaint all nodes (only on resize / init — structural
+      //               and layout changes are handled per-node via _paintDirty)
+      const fullRepaint = fullRedraw;
 
-      // Notify layout subscribers
-      notifyLayoutSubscribers(container.children);
+      // ── Phase 1: Layout ──
+      const tLayout0 = performance.now();
+      const layoutChanged = computeLayout(container.children, cols, rows, rootYogaNode, fullRepaint);
+      if (layoutChanged) {
+        // Defer layout notifications to after React's commit phase.
+        // Calling setState inside the commit cycle counts as a nested update
+        // and triggers "Maximum update depth exceeded" at high frame rates.
+        queueMicrotask(() => notifyLayoutSubscribers(container.children));
+      }
+      const tLayout1 = performance.now();
 
       // Find cursor info for focused input
       let cursorInfo: { nodeId: string; position: number } | undefined;
@@ -412,56 +445,83 @@ export function render(
         }
       }
 
-      // Paint
+      // ── Phase 2: Paint ──
+      const tPaint0 = performance.now();
       const paintResult = paintTree(container.children, currentFb, {
         cursorInfo,
         useNativeCursor,
+        fullRedraw: fullRepaint,
       });
+      const tPaint1 = performance.now();
 
-      // Diff & flush
-      const output = diffFramebuffers(prevFb, currentFb, fullRedraw);
+      // ── Phase 3: Diff & flush ──
+      // Everything (diff + cursor) is built into one string inside
+      // diffFramebuffers, wrapped in synchronized update (DEC 2026).
+      // Single terminal.write() = atomic screen update, no cursor flicker.
+      const tDiff0 = performance.now();
+      const wantCursor = useNativeCursor && !!paintResult.cursorPosition;
 
-      if (output.length > 0) {
-        terminal.write(output);
-      }
+      const cursorX = paintResult.cursorPosition?.x ?? -1;
+      const cursorY = paintResult.cursorPosition?.y ?? -1;
+      const cursorColor = wantCursor ? getContrastCursorColor(paintResult.cursorPosition!.bg) : "";
 
-      // Render images on top of framebuffer
-      // Hide cursor while rendering images to prevent artifacts
-      if (pendingImageRenders.size > 0 && nativeCursorVisible) {
+      const cursor: CursorState = {
+        visible: wantCursor,
+        x: cursorX >= 0 ? cursorX : undefined,
+        y: cursorY >= 0 ? cursorY : undefined,
+        color: cursorColor || undefined,
+        prevX: lastCursorX,
+        prevY: lastCursorY,
+        prevColor: lastCursorColor,
+      };
+
+      const output = diffFramebuffers(prevFb, currentFb, fullRedraw, cursor);
+      terminal.write(output);
+      nativeCursorVisible = wantCursor;
+      lastCursorX = cursorX;
+      lastCursorY = cursorY;
+      lastCursorColor = cursorColor;
+      const tDiff1 = performance.now();
+
+      // Render images on top of framebuffer.
+      // Image protocols (Kitty in tmux) may show the cursor as a side
+      // effect, so always hide it after rendering and reset state.
+      if (pendingImageRenders.size > 0) {
+        renderPendingImages();
+        // Ensure cursor is hidden after image data — protocols can
+        // move/show cursor as a side-effect (e.g. Kitty tmux wrapper).
         terminal.hideCursor();
         nativeCursorVisible = false;
       }
-      renderPendingImages();
 
-      // Handle native cursor positioning
-      if (useNativeCursor) {
-        if (paintResult.cursorPosition) {
-          // Set cursor color to contrast with input background
-          const cursorColor = getContrastCursorColor(paintResult.cursorPosition.bg);
-          terminal.setCursorColor(cursorColor);
-          // Position and show native cursor
-          terminal.moveCursor(paintResult.cursorPosition.x, paintResult.cursorPosition.y);
-          if (!nativeCursorVisible) {
-            terminal.showCursor();
-            nativeCursorVisible = true;
-          }
-        } else {
-          // No focused input - always hide native cursor
-          // (ensures cursor is hidden when Image or other non-input is focused)
-          terminal.hideCursor();
-          nativeCursorVisible = false;
-        }
-      }
+      // ── Phase 4: Swap buffers ──
+      const tSwap0 = performance.now();
+      prevFb.copyFrom(currentFb);
+      const tSwap1 = performance.now();
+      if (debug) perf.swapCopy = tSwap1 - tSwap0;
 
-      // Swap buffers
-      for (let i = 0; i < currentFb.cells.length; i++) {
-        prevFb.cells[i] = { ...currentFb.cells[i]! };
-      }
       fullRedraw = false;
+      const total = performance.now() - t0;
+      lastFrameTime = total;
+      frameTiming = {
+        total,
+        layout: tLayout1 - tLayout0,
+        paint: tPaint1 - tPaint0,
+        diff: tDiff1 - tDiff0,
+        swap: tSwap1 - tSwap0,
+      };
+
+      // Flush profiling data (only when debug=true)
+      if (debug) flushFramePerf(total);
     }
 
     function notifyLayoutSubscribers(nodes: GlyphNode[]): void {
       for (const node of nodes) {
+        // Notify all subscribers unconditionally.  React's useState
+        // bail-out prevents re-renders when the layout object reference
+        // hasn't changed (stable frames keep the same node.layout ref).
+        // We can NOT filter by _paintDirty here because the paint phase
+        // clears that flag before this deferred microtask runs.
         const subs = layoutSubscriptions.get(node);
         if (subs) {
           for (const handler of subs) {
@@ -624,6 +684,12 @@ export function render(
           terminal.write(clearSeq);
         }
         
+        // Free persistent Yoga root (children freed by detachDeletedInstance)
+        while (rootYogaNode.getChildCount() > 0) {
+          rootYogaNode.removeChild(rootYogaNode.getChild(0));
+        }
+        rootYogaNode.free();
+
         terminal.cleanup();
       },
       exit(code?: number) {

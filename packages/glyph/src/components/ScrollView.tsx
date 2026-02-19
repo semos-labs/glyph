@@ -1,11 +1,11 @@
-import React, { useRef, useState, useCallback, useEffect, useContext, useMemo } from "react";
+import React, { useRef, useState, useCallback, useEffect, useContext, useMemo, useImperativeHandle, forwardRef } from "react";
 import type { ReactNode } from "react";
 import type { Style, Key } from "../types/index.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 import { useLayout } from "../hooks/useLayout.js";
 import { useInput } from "../hooks/useInput.js";
-import { FocusContext, LayoutContext, ScrollViewContext } from "../hooks/context.js";
-import type { ScrollViewContextValue, ScrollViewBounds, ScrollIntoViewOptions } from "../hooks/context.js";
+import { FocusContext, InputContext, LayoutContext, ScrollViewContext, nodeScrollContextMap } from "../hooks/context.js";
+import type { FocusContextValue, ScrollViewContextValue, ScrollViewBounds, ScrollIntoViewOptions } from "../hooks/context.js";
 
 /**
  * Visible range passed to the render function in virtualized mode.
@@ -26,9 +26,9 @@ export interface VisibleRange {
  * Props for the {@link ScrollView} component.
  */
 export interface ScrollViewProps {
-  /** 
-   * Children to render. When `virtualize` is true, only visible children are rendered.
-   * Can also be a render function `(range: VisibleRange) => ReactNode` for line-based virtualization.
+  /**
+   * Children to render. Can also be a render function
+   * `(range: VisibleRange) => ReactNode` for line-based virtualization.
    */
   children?: ReactNode | ((range: VisibleRange) => ReactNode);
   style?: Style;
@@ -50,7 +50,7 @@ export interface ScrollViewProps {
   focusable?: boolean;
   /** Style applied when ScrollView is focused */
   focusedStyle?: Style;
-  /** 
+  /**
    * Total content height in lines (for render function mode).
    * When set with a render function, enables line-based virtualization.
    */
@@ -58,26 +58,56 @@ export interface ScrollViewProps {
   /** Extra lines to render above/below viewport (default: 2) */
   overscan?: number;
   /**
-   * Enable virtualization. When true, only visible children are rendered.
-   * Heights are auto-measured - no need to specify them!
+   * Enable sliding-window virtualization for array children.
+   * When true, only visible items (+ overscan) are mounted.
+   * When false (default), all children are rendered and clipped — like
+   * browser overflow scrolling.  This gives Yoga full layout info so
+   * `scrollIntoView` / follow-focus positions are always accurate.
    */
   virtualize?: boolean;
   /**
    * Estimated height per child in lines (default: 1).
-   * Used for initial scroll calculations before actual heights are measured.
+   * Only used in virtualized mode for initial scroll calculations
+   * before actual heights are measured.
    */
   estimatedItemHeight?: number;
 }
 
 /**
- * Scrollable container with optional built-in virtualization.
+ * Imperative handle exposed by `ScrollView` via `React.forwardRef`.
+ *
+ * @example
+ * ```tsx
+ * const ref = useRef<ScrollViewHandle>(null);
+ * <ScrollView ref={ref} style={{ height: 20 }}>
+ *   {items.map(…)}
+ * </ScrollView>
+ *
+ * // Scroll to item index 10, centered:
+ * ref.current?.scrollToIndex(10, { block: "center" });
+ * ```
+ * @category Layout
+ */
+export interface ScrollViewHandle {
+  /** Scroll to make the child at `index` visible (even off-screen items). */
+  scrollToIndex(index: number, options?: ScrollIntoViewOptions): void;
+  /** Scroll to make the given node visible. */
+  scrollTo(node: GlyphNode, options?: ScrollIntoViewOptions): void;
+}
+
+/**
+ * Scrollable container.
  *
  * Supports three modes:
- * 1. **Basic** — wraps arbitrary content and scrolls via keyboard.
- * 2. **Array virtualization** — set `virtualize` to only render visible children.
- * 3. **Line virtualization** — pass a render function + `totalLines` for giant lists.
+ * 1. **Array children** (default) — all children rendered, overflow clipped.
+ *    Yoga has every layout position, so follow-focus is pixel-perfect.
+ * 2. **Virtualized array** (`virtualize` prop) — only visible items mounted
+ *    (sliding window).  Good for huge lists where rendering everything would
+ *    be too expensive.
+ * 3. **Line virtualization** — pass a render function + `totalLines`.
  *
- * Auto-scrolls to keep the focused child visible when `scrollToFocus` is `true` (default).
+ * Auto-scrolls to keep the focused child visible when `scrollToFocus` is
+ * `true` (default).
  *
  * **Keyboard shortcuts** (when the ScrollView or a child has focus):
  * | Key | Action |
@@ -88,7 +118,7 @@ export interface ScrollViewProps {
  *
  * @example
  * ```tsx
- * // Basic scrollable content
+ * // Basic scrollable list — all children rendered, overflow clipped
  * <ScrollView style={{ height: 10, border: "round" }}>
  *   {items.map((item) => (
  *     <Text key={item.id}>{item.name}</Text>
@@ -98,9 +128,9 @@ export interface ScrollViewProps {
  *
  * @example
  * ```tsx
- * // Virtualized — only visible children are mounted
- * <ScrollView virtualize style={{ height: 20 }}>
- *   {thousandsOfItems.map((item) => (
+ * // Virtualized list — only visible items mounted
+ * <ScrollView virtualize style={{ height: 10, border: "round" }}>
+ *   {items.map((item) => (
  *     <Text key={item.id}>{item.name}</Text>
  *   ))}
  * </ScrollView>
@@ -117,9 +147,9 @@ export interface ScrollViewProps {
  *   }
  * </ScrollView>
  * ```
-  * @category Layout
+ * @category Layout
  */
-export function ScrollView({
+export const ScrollView = forwardRef<ScrollViewHandle, ScrollViewProps>(function ScrollView({
   children,
   style,
   scrollOffset: controlledOffset,
@@ -135,78 +165,88 @@ export function ScrollView({
   overscan = 2,
   virtualize = false,
   estimatedItemHeight = 1,
-}: ScrollViewProps): React.JSX.Element {
+}: ScrollViewProps, ref: React.Ref<ScrollViewHandle>): React.JSX.Element {
   const isControlled = controlledOffset !== undefined;
   const [internalOffset, setInternalOffset] = useState(defaultScrollOffset);
   const offset = isControlled ? controlledOffset : internalOffset;
 
-  // Check what kind of children we have
+  // ── Children classification ──
   const isRenderFunction = typeof children === "function";
-  
-  // Convert children to array for virtualization (handles fragments, single elements, etc.)
+
+  // Flatten children into a stable array (handles fragments, single elements, etc.)
   const childArray = useMemo(() => {
     if (isRenderFunction) return [];
     return React.Children.toArray(children);
   }, [children, isRenderFunction]);
-  
-  // Line-based virtualization: render function + totalLines
-  const isLineVirtualized = totalLines !== undefined && isRenderFunction;
-  
-  // Array virtualization: enabled when virtualize flag is set and we have children
-  const isArrayVirtualized = virtualize && !isRenderFunction && childArray.length > 0;
 
+  const isLineVirtualized = totalLines !== undefined && isRenderFunction;
+  const isArrayMode = !isRenderFunction && childArray.length > 0;
+  const isArrayVirtualized = !!virtualize && isArrayMode;
+
+  // ── Refs ──
   const viewportRef = useRef<GlyphNode | null>(null);
   const contentRef = useRef<GlyphNode | null>(null);
   const viewportLayout = useLayout(viewportRef);
+
+  // For single-child / non-virtualized mode we measure the content wrapper
   const contentLayout = useLayout(contentRef);
-  
-  // Track measured heights for array items (index -> height in lines)
+
+  // Per-item measured heights (index → rows) — used only in virtualized mode
   const measuredHeightsRef = useRef<Map<number, number>>(new Map());
   const itemRefsRef = useRef<Map<number, GlyphNode>>(new Map());
-  
+
   const focusCtx = useContext(FocusContext);
+  const inputCtx = useContext(InputContext);
   const layoutCtx = useContext(LayoutContext);
 
-  // Generate stable focus ID for this ScrollView if focusable
+  // ── Focus ID for the ScrollView itself ──
   const focusIdRef = useRef<string | null>(null);
   if (focusable && !focusIdRef.current) {
     focusIdRef.current = `scrollview-${Math.random().toString(36).slice(2, 9)}`;
   }
   const focusId = focusable ? focusIdRef.current : null;
 
-  // Register with focus system if focusable
   useEffect(() => {
     if (!focusable || !focusId || !focusCtx || !viewportRef.current) return;
-    return focusCtx.register(focusId, viewportRef.current);
+    // autoFocus: false — the container should never win auto-focus over
+    // its child items.  It's focusable so it can receive keyboard scrolling,
+    // but it shouldn't be auto-focused when children exist.
+    return focusCtx.register(focusId, viewportRef.current, /* autoFocus */ false);
   }, [focusable, focusId, focusCtx]);
 
-  // Check if this ScrollView is directly focused
   const isSelfFocused = focusable && focusId && focusCtx?.focusedId === focusId;
 
+  // ── Viewport metrics ──
   const viewportHeight = viewportLayout.innerHeight;
-  
-  // Calculate total content height based on mode
-  const getArrayTotalHeight = useCallback(() => {
-    if (!isArrayVirtualized) return 0;
+
+  // ── Effective padding on the inner content wrapper ──
+  // Needed for virtualized mode where content height is computed
+  // from the heights map (must include padding).
+  const contentPadTop = ((style?.paddingTop ?? style?.paddingY ?? style?.padding ?? 0) as number);
+  const contentPadBottom = ((style?.paddingBottom ?? style?.paddingY ?? style?.padding ?? 0) as number);
+
+  // ── Content height ──
+  // Virtualized array: padding + sum of estimated/measured item heights.
+  // Non-virtualized array / single-child: Yoga-measured content wrapper height.
+  // Line mode: totalLines.
+  const getArrayContentHeight = useCallback((): number => {
     let total = 0;
     for (let i = 0; i < childArray.length; i++) {
       total += measuredHeightsRef.current.get(i) ?? estimatedItemHeight;
     }
-    return total;
-  }, [isArrayVirtualized, childArray.length, estimatedItemHeight]);
-  
-  // Content height: line-virtualized uses totalLines, array-virtualized calculates, otherwise measure
-  const contentHeight = isLineVirtualized 
-    ? totalLines! 
-    : isArrayVirtualized 
-      ? getArrayTotalHeight() 
-      : contentLayout.height;
-  const maxOffset = Math.max(0, contentHeight - viewportHeight);
+    return contentPadTop + total + contentPadBottom;
+  }, [childArray.length, estimatedItemHeight, contentPadTop, contentPadBottom]);
 
-  // Always clamp the effective offset used for rendering
+  const contentHeight = isLineVirtualized
+    ? totalLines!
+    : isArrayVirtualized
+      ? getArrayContentHeight()
+      : contentLayout.height;
+
+  const maxOffset = Math.max(0, contentHeight - viewportHeight);
   const effectiveOffset = Math.max(0, Math.min(offset, maxOffset));
 
-  // Keep refs for lazy access in scrollTo (called outside render cycle)
+  // ── Lazy refs (accessed outside the render cycle) ──
   const offsetRef = useRef(effectiveOffset);
   offsetRef.current = effectiveOffset;
   const viewportHeightRef = useRef(viewportHeight);
@@ -226,7 +266,222 @@ export function ScrollView({
   );
   setOffsetRef.current = setOffset;
 
-  // Provide ScrollView context for children (e.g., Select) to know their boundaries
+  // ── Visible range (virtualized array mode) ──
+  // Determines which children are mounted.  Includes overscan rows
+  // above and below the viewport for smoother scrolling.
+  //
+  // Offsets are in **content-space** (padding included), matching the
+  // values returned by `getItemContentTop` and `getArrayContentHeight`.
+  const getVisibleRange = useCallback((): {
+    startIndex: number;
+    endIndex: number;
+    startOffset: number;
+    partialClip: number;
+  } => {
+    if (!isArrayVirtualized) return { startIndex: 0, endIndex: 0, startOffset: 0, partialClip: 0 };
+
+    // Item positions start after paddingTop
+    let currentOffset = contentPadTop;
+    let startIndex = 0;
+    let startOffset = contentPadTop;
+
+    for (let i = 0; i < childArray.length; i++) {
+      const h = measuredHeightsRef.current.get(i) ?? estimatedItemHeight;
+      if (currentOffset + h > effectiveOffset - overscan) {
+        startIndex = i;
+        startOffset = currentOffset;
+        break;
+      }
+      currentOffset += h;
+      startIndex = i + 1;
+      startOffset = currentOffset;
+    }
+
+    let endIndex = startIndex;
+    currentOffset = startOffset;
+    for (let i = startIndex; i < childArray.length; i++) {
+      const h = measuredHeightsRef.current.get(i) ?? estimatedItemHeight;
+      endIndex = i + 1;
+      currentOffset += h;
+      if (currentOffset >= effectiveOffset + viewportHeight + overscan) break;
+    }
+
+    const partialClip = Math.max(0, effectiveOffset - startOffset);
+    return { startIndex, endIndex, startOffset, partialClip };
+  }, [isArrayVirtualized, childArray.length, effectiveOffset, viewportHeight, overscan, estimatedItemHeight, contentPadTop]);
+
+  const visibility = getVisibleRange();
+
+  // ── Visible range (line-based virtualization) ──
+  const visibleRange = useMemo((): VisibleRange => {
+    const start = Math.max(0, effectiveOffset - overscan);
+    const end = Math.min(totalLines ?? contentHeight, effectiveOffset + viewportHeight + overscan);
+    return { start, end, scrollOffset: effectiveOffset, viewportHeight };
+  }, [effectiveOffset, viewportHeight, overscan, totalLines, contentHeight]);
+
+  // ── Helper: content-space Y position for item at `index` (virtualized) ──
+  // Includes padding — content row 0 is the first row of padding,
+  // first item is at contentPadTop.
+  const getItemContentTop = useCallback((index: number): number => {
+    let top = contentPadTop;
+    for (let i = 0; i < index && i < childArray.length; i++) {
+      top += measuredHeightsRef.current.get(i) ?? estimatedItemHeight;
+    }
+    return top;
+  }, [childArray.length, estimatedItemHeight, contentPadTop]);
+
+  const getItemContentTopRef = useRef(getItemContentTop);
+  getItemContentTopRef.current = getItemContentTop;
+
+  // ── Keep a ref to isArrayVirtualized for stable closure capture ──
+  const isArrayVirtualizedRef = useRef(isArrayVirtualized);
+  isArrayVirtualizedRef.current = isArrayVirtualized;
+
+  // ── scrollToNodeRef ──────────────────────────────────────────────
+  // Shared scroll-to-node function for public scrollTo, follow-focus,
+  // and useScrollIntoView.
+  //
+  // Non-virtualized: walks the Yoga tree from the node up to the
+  // content box, accumulating getComputedLayout().top.  Always
+  // accurate because Yoga positions are fresh after calculateLayout().
+  //
+  // Virtualized: uses the measured-heights map (off-screen items
+  // aren't mounted, so Yoga positions aren't available for them).
+  const scrollToNodeRef = useRef<(node: GlyphNode, options?: ScrollIntoViewOptions) => void>(() => {});
+  scrollToNodeRef.current = (node: GlyphNode, options?: ScrollIntoViewOptions) => {
+    const block = options?.block ?? "nearest";
+
+    let elementTop: number;
+    let nodeHeight: number;
+
+    if (isArrayVirtualizedRef.current) {
+      // ── Virtualized: heights map ──
+      let itemIndex = -1;
+      for (const [idx, itemNode] of itemRefsRef.current) {
+        if (itemNode === node || isDescendantOf(node, itemNode)) {
+          itemIndex = idx;
+          break;
+        }
+      }
+
+      if (itemIndex >= 0) {
+        elementTop = getItemContentTopRef.current(itemIndex);
+        nodeHeight = measuredHeightsRef.current.get(itemIndex) ?? estimatedItemHeight;
+      } else {
+        return;
+      }
+    } else {
+      // ── Non-virtualized: Yoga walk-up ──
+      // Walk from the focused node to the content box, summing
+      // getComputedLayout().top at each level.  Result is the
+      // node's position relative to the content box's border box
+      // (i.e., padding is already included).
+      if (!contentRef.current) return;
+
+      const targetYn = node.yogaNode;
+      nodeHeight = targetYn ? (targetYn.getComputedLayout().height || 1) : (node.layout.height || 1);
+
+      let top = 0;
+      let cur: GlyphNode | null = node;
+      while (cur && cur !== contentRef.current) {
+        const yn = cur.yogaNode;
+        if (yn) top += yn.getComputedLayout().top;
+        cur = cur.parent;
+      }
+      if (!cur) return; // node is not inside the content box
+
+      elementTop = top;
+    }
+
+    const elementBottom = elementTop + nodeHeight;
+    const curOffset = offsetRef.current;
+    const vpHeight = viewportHeightRef.current;
+
+    switch (block) {
+      case "start":
+        setOffsetRef.current(elementTop);
+        break;
+      case "center":
+        setOffsetRef.current(elementTop - Math.floor((vpHeight - nodeHeight) / 2));
+        break;
+      case "end":
+        setOffsetRef.current(elementBottom - vpHeight);
+        break;
+      case "nearest":
+      default: {
+        if (elementTop < curOffset) {
+          setOffsetRef.current(elementTop);
+        } else if (elementBottom > curOffset + vpHeight) {
+          setOffsetRef.current(elementBottom - vpHeight);
+        }
+        break;
+      }
+    }
+  };
+
+  // ── scrollToIndex ────────────────────────────────────────────────
+  // Scroll to an item by array index.
+  // Non-virtualized: reads Yoga position from the wrapper node.
+  // Virtualized: computes from the heights map.
+  const scrollToIndexRef = useRef<(index: number, options?: ScrollIntoViewOptions) => void>(() => {});
+  scrollToIndexRef.current = (index: number, options?: ScrollIntoViewOptions) => {
+    if (index < 0 || index >= childArray.length) return;
+    const block = options?.block ?? "nearest";
+
+    let elementTop: number;
+    let nodeHeight: number;
+
+    if (isArrayVirtualizedRef.current) {
+      elementTop = getItemContentTopRef.current(index);
+      nodeHeight = measuredHeightsRef.current.get(index) ?? estimatedItemHeight;
+    } else {
+      // Non-virtualized: all children are mounted — use Yoga position
+      const wrapperNode = itemRefsRef.current.get(index);
+      if (!wrapperNode?.yogaNode) return;
+      const cl = wrapperNode.yogaNode.getComputedLayout();
+      elementTop = cl.top;
+      nodeHeight = cl.height || 1;
+    }
+
+    const elementBottom = elementTop + nodeHeight;
+    const curOffset = offsetRef.current;
+    const vpHeight = viewportHeightRef.current;
+
+    switch (block) {
+      case "start":
+        setOffsetRef.current(elementTop);
+        break;
+      case "center":
+        setOffsetRef.current(elementTop - Math.floor((vpHeight - nodeHeight) / 2));
+        break;
+      case "end":
+        setOffsetRef.current(elementBottom - vpHeight);
+        break;
+      case "nearest":
+      default:
+        if (elementTop < curOffset) setOffsetRef.current(elementTop);
+        else if (elementBottom > curOffset + vpHeight) setOffsetRef.current(elementBottom - vpHeight);
+        break;
+    }
+  };
+
+  // ── Pending focus (virtualized only) ────────────────────────────
+  // When Tab scrolls to an off-screen item, we store the target
+  // index here.  After the next render the item mounts + registers
+  // with the focus system, and the effect below focuses it.
+  const pendingFocusIndexRef = useRef<number | null>(null);
+
+  // ── Imperative handle (for external callers via ref) ──
+  useImperativeHandle(ref, () => ({
+    scrollToIndex(index: number, options?: ScrollIntoViewOptions) {
+      scrollToIndexRef.current(index, options);
+    },
+    scrollTo(node: GlyphNode, options?: ScrollIntoViewOptions) {
+      scrollToNodeRef.current(node, options);
+    },
+  }));
+
+  // ── ScrollView context ──
   const scrollViewContextValue = useMemo((): ScrollViewContextValue => ({
     getBounds: (): ScrollViewBounds => {
       const viewportY = viewportLayout.y;
@@ -237,130 +492,179 @@ export function ScrollView({
         scrollOffset: effectiveOffset,
       };
     },
-    scrollTo: (node: GlyphNode, options?: ScrollIntoViewOptions): void => {
-      if (!contentRef.current) return;
-
-      const block = options?.block ?? "nearest";
-      const contentTopY = contentRef.current.layout?.y ?? 0;
-      const elementTop = node.layout.y - contentTopY;
-      const elementBottom = elementTop + node.layout.height;
-      const curOffset = offsetRef.current;
-      const vpHeight = viewportHeightRef.current;
-
-      switch (block) {
-        case "start":
-          setOffsetRef.current(elementTop);
-          break;
-        case "center":
-          setOffsetRef.current(elementTop - Math.floor((vpHeight - node.layout.height) / 2));
-          break;
-        case "end":
-          setOffsetRef.current(elementBottom - vpHeight);
-          break;
-        case "nearest":
-        default: {
-          const visibleTop = curOffset;
-          const visibleBottom = curOffset + vpHeight;
-          if (elementTop < visibleTop) {
-            setOffsetRef.current(elementTop);
-          } else if (elementBottom > visibleBottom) {
-            setOffsetRef.current(elementBottom - vpHeight);
-          }
-          break;
-        }
-      }
+    scrollTo: (node: GlyphNode, opts?: ScrollIntoViewOptions): void => {
+      scrollToNodeRef.current(node, opts);
+    },
+    scrollToIndex: (index: number, opts?: ScrollIntoViewOptions): void => {
+      scrollToIndexRef.current(index, opts);
     },
   }), [viewportLayout.y, viewportHeight, effectiveOffset]);
 
-  // Re-clamp when content/viewport changes
+  // Keep WeakMap fresh for useScrollIntoView parent-chain lookups
+  useEffect(() => {
+    if (contentRef.current) {
+      nodeScrollContextMap.set(contentRef.current, scrollViewContextValue);
+    }
+  }, [scrollViewContextValue]);
+
+  // ── Re-clamp when content/viewport changes ──
   useEffect(() => {
     if (offset > maxOffset && maxOffset >= 0) {
       setOffset(maxOffset);
     }
   }, [offset, maxOffset, setOffset]);
 
-  // Focus-aware scrolling: scroll to make focused element visible
+  // ── Follow-focus ──
+  // When focus moves to a child, scroll to keep it in view.
   useEffect(() => {
-    if (!scrollToFocus || !focusCtx || !layoutCtx || !contentRef.current) return;
+    if (!scrollToFocus || !focusCtx || !contentRef.current) return;
 
     const unsubscribe = focusCtx.onFocusChange((focusedId) => {
       if (!focusedId || !contentRef.current) return;
 
-      // Find the focused node by walking the content tree
-      const findNode = (node: GlyphNode): GlyphNode | null => {
-        if (node.focusId === focusedId) return node;
-        for (const child of node.children) {
-          const found = findNode(child);
-          if (found) return found;
-        }
-        return null;
-      };
+      const focusedNode = findFocusIdInTree(contentRef.current, focusedId);
+      if (!focusedNode) return;
 
-      const focusedNode = findNode(contentRef.current);
-      if (!focusedNode) return; // Focused element is not inside this ScrollView
-
-      // Get layout of focused element relative to content
-      const focusedLayout = layoutCtx.getLayout(focusedNode);
-      const contentTopY = contentRef.current.layout?.y ?? 0;
-      
-      // Calculate element position relative to content top
-      const elementTop = focusedLayout.y - contentTopY;
-      const elementBottom = elementTop + focusedLayout.height;
-      
-      // Current visible range
-      const visibleTop = offset;
-      const visibleBottom = offset + viewportHeight;
-      
-      // Check if element is fully visible
-      if (elementTop < visibleTop) {
-        // Element is above visible area - scroll up
-        setOffset(elementTop);
-      } else if (elementBottom > visibleBottom) {
-        // Element is below visible area - scroll down
-        setOffset(elementBottom - viewportHeight);
-      }
+      scrollToNodeRef.current(focusedNode, { block: "nearest" });
     });
 
     return unsubscribe;
-  }, [scrollToFocus, focusCtx, layoutCtx, offset, viewportHeight, setOffset]);
+  }, [scrollToFocus, focusCtx]);
 
-  // Check if this ScrollView contains the currently focused element (or is itself focused)
+  // ── Initial scroll-to-focus ──
+  // Auto-focus fires during children's effects (before the ScrollView's
+  // follow-focus subscribes), so the onFocusChange handler misses it.
+  // Once layout is ready (viewportHeight > 0, contentHeight > 0), we do
+  // a one-time check: if something inside is already focused, scroll to
+  // it.  For the first item this is a no-op (already visible).
+  const initialScrollDoneRef = useRef(false);
+  useEffect(() => {
+    if (initialScrollDoneRef.current) return;
+    if (!scrollToFocus || !focusCtx || !contentRef.current) return;
+    if (viewportHeight <= 0 || contentHeight <= 0) return;
+
+    initialScrollDoneRef.current = true;
+
+    const fid = focusCtx.focusedId;
+    if (!fid) return;
+
+    const focusedNode = findFocusIdInTree(contentRef.current, fid);
+    if (!focusedNode) return;
+
+    scrollToNodeRef.current(focusedNode, { block: "nearest" });
+  }, [scrollToFocus, focusCtx, viewportHeight, contentHeight]);
+
+  // ── Priority Tab handler ──────────────────────────────────────────
+  // Owns Tab/Shift+Tab when focus is inside this ScrollView (both
+  // virtualized AND non-virtualized array modes).
+  //
+  // Why for ALL array-mode ScrollViews?
+  // The default focus system sorts by absolute visual Y position.
+  // With multiple ScrollViews side-by-side, items at the same Y
+  // across different ScrollViews get interleaved.  Scrolled-off items
+  // have wildly negative Y values, making the order even worse.
+  //
+  // By consuming Tab here we guarantee index-order navigation within
+  // each ScrollView.  At the boundary we find the next external
+  // focusable and hand off cleanly.
+  useEffect(() => {
+    if (!isArrayMode || !scrollToFocus || !inputCtx || !focusCtx) return;
+
+    const handler = (key: Key): boolean => {
+      if (key.name !== "tab" || key.ctrl || key.alt) return false;
+
+      const fid = focusCtx.focusedId;
+      if (!fid) return false;
+      if (!contentRef.current) return false;
+      if (!findFocusIdInTree(contentRef.current, fid)) return false;
+
+      let currentIdx = -1;
+      for (const [idx, node] of itemRefsRef.current) {
+        if (hasFocusId(node, fid)) {
+          currentIdx = idx;
+          break;
+        }
+      }
+      if (currentIdx < 0) return false;
+
+      const nextIdx = key.shift ? currentIdx - 1 : currentIdx + 1;
+
+      // ── Within bounds: navigate inside the ScrollView ──
+      if (nextIdx >= 0 && nextIdx < childArray.length) {
+        scrollToIndexRef.current(nextIdx, { block: "nearest" });
+
+        const nextNode = itemRefsRef.current.get(nextIdx);
+        if (nextNode) {
+          const targetId = findFirstFocusId(nextNode);
+          if (targetId) focusCtx.requestFocus(targetId);
+        } else if (isArrayVirtualized) {
+          // Off-screen in virtualized mode — will mount after scroll
+          pendingFocusIndexRef.current = nextIdx;
+        }
+        return true;
+      }
+
+      // ── At the boundary: exit to next external focusable ──
+      const externalTarget = findExternalFocusTarget(
+        contentRef.current,
+        viewportRef.current,
+        focusCtx,
+        key.shift ? "backward" : "forward",
+      );
+
+      if (externalTarget) {
+        focusCtx.requestFocus(externalTarget);
+        return true;
+      }
+
+      // No external target — let Tab pass through (wraps via default system)
+      return false;
+    };
+
+    return inputCtx.subscribePriority(handler);
+  }, [isArrayMode, scrollToFocus, inputCtx, focusCtx, childArray.length, isArrayVirtualized]);
+
+  // ── Resolve pending focus after mount (virtualized only) ──
+  useEffect(() => {
+    if (!isArrayVirtualized) return;
+    const idx = pendingFocusIndexRef.current;
+    if (idx === null || !focusCtx) return;
+
+    const node = itemRefsRef.current.get(idx);
+    if (!node) return;
+
+    const targetFocusId = findFirstFocusId(node);
+    if (targetFocusId) {
+      focusCtx.requestFocus(targetFocusId);
+    }
+    pendingFocusIndexRef.current = null;
+  });
+
+  // ── Keyboard ──
   const containsFocus = useCallback((): boolean => {
     if (!focusCtx) return false;
     const currentFocusId = focusCtx.focusedId;
     if (!currentFocusId) return false;
-
-    // Check if ScrollView itself is focused
     if (focusable && focusId && currentFocusId === focusId) return true;
-
-    // Walk the content tree to find if focused element is inside
     if (!contentRef.current) return false;
-    const findNode = (node: GlyphNode): boolean => {
+    const find = (node: GlyphNode): boolean => {
       if (node.focusId === currentFocusId) return true;
       for (const child of node.children) {
-        if (findNode(child)) return true;
+        if (find(child)) return true;
       }
       return false;
     };
-
-    return findNode(contentRef.current);
+    return find(contentRef.current);
   }, [focusCtx, focusable, focusId]);
 
   useInput((key: Key) => {
     if (disableKeyboard) return;
-
-    // Only respond to scroll keys if this ScrollView contains focus
-    // This prevents multiple ScrollViews from all scrolling at once
     if (!containsFocus()) return;
 
     const halfPage = Math.max(1, Math.floor(viewportHeight / 2));
     const fullPage = Math.max(1, viewportHeight);
 
-    // Check if a text input is likely focused (skip conflicting vim keys)
-    // We use Page Up/Down which never conflict with text inputs
-    
     switch (key.name) {
-      // Page keys - always safe, inputs don't use these
       case "pageup":
         setOffset(offset - fullPage);
         break;
@@ -368,32 +672,19 @@ export function ScrollView({
         setOffset(offset + fullPage);
         break;
       default:
-        // Ctrl combinations that don't conflict with input editing
         if (key.ctrl) {
-          if (key.name === "d") {
-            // Ctrl+D - half page down
-            setOffset(offset + halfPage);
-          } else if (key.name === "u") {
-            // Ctrl+U - half page up
-            setOffset(offset - halfPage);
-          } else if (key.name === "f") {
-            // Ctrl+F - full page down
-            setOffset(offset + fullPage);
-          } else if (key.name === "b") {
-            // Ctrl+B - full page up
-            setOffset(offset - fullPage);
-          }
+          if (key.name === "d") setOffset(offset + halfPage);
+          else if (key.name === "u") setOffset(offset - halfPage);
+          else if (key.name === "f") setOffset(offset + fullPage);
+          else if (key.name === "b") setOffset(offset - fullPage);
         }
         break;
     }
   }, [offset, scrollStep, viewportHeight, maxOffset, disableKeyboard, setOffset, containsFocus]);
 
-  // Extract padding from the user style — it must live on the inner content
-  // wrapper, not the outer viewport.  The clip region is the outer box's
-  // *content area* (after border + padding).  The inner absolute child is
-  // positioned relative to the *padding box* (after border only).  If padding
-  // stays on the outer box, the first columns/rows of content fall outside the
-  // clip and get cut off.
+  // ── Padding extraction ──
+  // Padding lives on the inner content wrapper (same as before) so
+  // the clip region on the outer box aligns with the border edge.
   const {
     padding: _pad,
     paddingX: _px,
@@ -405,22 +696,21 @@ export function ScrollView({
     ...styleRest
   } = style ?? {};
 
-  // Calculate intrinsic height (content + border if any)
+  // ── Intrinsic height ──
   const hasBorder = styleRest.border != null && styleRest.border !== "none";
   const borderHeight = hasBorder ? 2 : 0;
   const intrinsicHeight = contentHeight > 0 ? contentHeight + borderHeight : undefined;
-  
-  // Outer viewport style:
-  // - If no explicit height set by user, use content height as intrinsic size
-  // - flexShrink: 1 allows shrinking when parent constrains (e.g., maxHeight)
-  // - minHeight: 0 allows shrinking to any size
-  // - clip: true enables content clipping for scrolling
+
+  const useIntrinsicHeight =
+    styleRest.height === undefined &&
+    intrinsicHeight !== undefined &&
+    !styleRest.flexGrow;
+
   const outerStyle: Style = {
     ...styleRest,
     ...(isSelfFocused ? focusedStyle : {}),
     clip: true,
-    // Only set intrinsic height if user didn't set explicit height
-    ...(styleRest.height === undefined && intrinsicHeight !== undefined
+    ...(useIntrinsicHeight
       ? {
           height: intrinsicHeight,
           flexShrink: styleRest.flexShrink ?? 1,
@@ -429,69 +719,18 @@ export function ScrollView({
       : {}),
   };
 
-  // Calculate visible range for line-based virtualization
-  const visibleRange = useMemo((): VisibleRange => {
-    const start = Math.max(0, effectiveOffset - overscan);
-    const end = Math.min(totalLines ?? contentHeight, effectiveOffset + viewportHeight + overscan);
-    return {
-      start,
-      end,
-      scrollOffset: effectiveOffset,
-      viewportHeight,
-    };
-  }, [effectiveOffset, viewportHeight, overscan, totalLines, contentHeight]);
+  // ── Content wrapper style ──
+  // position: absolute so it does NOT push the outer box's auto-height.
+  //
+  // Non-virtualized: top = -effectiveOffset (classic browser-like scroll).
+  // Virtualized: top = startOffset - effectiveOffset - contentPadTop.
+  const contentTop = isArrayVirtualized
+    ? (visibility.startOffset - effectiveOffset - contentPadTop)
+    : isLineVirtualized
+      ? -(effectiveOffset - visibleRange.start)
+      : -effectiveOffset;
 
-  // Calculate visible items for array virtualization
-  const getVisibleArrayItems = useCallback((): { startIndex: number; endIndex: number; startOffset: number } => {
-    if (!isArrayVirtualized) return { startIndex: 0, endIndex: 0, startOffset: 0 };
-    
-    let currentOffset = 0;
-    let startIndex = 0;
-    let startOffset = 0;
-    
-    // Find first visible item
-    for (let i = 0; i < childArray.length; i++) {
-      const itemHeight = measuredHeightsRef.current.get(i) ?? estimatedItemHeight;
-      if (currentOffset + itemHeight > effectiveOffset - overscan) {
-        startIndex = i;
-        startOffset = currentOffset;
-        break;
-      }
-      currentOffset += itemHeight;
-      startIndex = i + 1;
-      startOffset = currentOffset;
-    }
-    
-    // Find last visible item
-    let endIndex = startIndex;
-    for (let i = startIndex; i < childArray.length; i++) {
-      const itemHeight = measuredHeightsRef.current.get(i) ?? estimatedItemHeight;
-      endIndex = i + 1;
-      currentOffset += itemHeight;
-      if (currentOffset >= effectiveOffset + viewportHeight + overscan) {
-        break;
-      }
-    }
-    
-    return { startIndex, endIndex, startOffset };
-  }, [isArrayVirtualized, childArray.length, effectiveOffset, viewportHeight, overscan, estimatedItemHeight]);
-
-  const arrayVisibility = getVisibleArrayItems();
-
-  // Inner content: absolutely positioned to fill viewport width,
-  // shifted up by scrollOffset. Padding lives here so text is indented
-  // without being clipped.
-  // In virtualized mode, we render at the visible start position.
-  const innerStyle: Style = {
-    position: "absolute" as const,
-    top: isLineVirtualized 
-      ? visibleRange.start - effectiveOffset 
-      : isArrayVirtualized 
-        ? arrayVisibility.startOffset - effectiveOffset
-        : -effectiveOffset,
-    left: 0,
-    right: 0,
-    flexDirection: "column" as const,
+  const paddingProps = {
     ...(_pad !== undefined && { padding: _pad }),
     ...(_px !== undefined && { paddingX: _px }),
     ...(_py !== undefined && { paddingY: _py }),
@@ -501,76 +740,81 @@ export function ScrollView({
     ...(_pl !== undefined && { paddingLeft: _pl }),
   };
 
-  // Resolve children based on mode
-  const renderedChildren: ReactNode = isLineVirtualized 
+  // ── Rendered children ──
+  const renderedChildren: ReactNode = isLineVirtualized
     ? (children as (range: VisibleRange) => ReactNode)(visibleRange)
     : isArrayVirtualized
-      ? childArray.slice(arrayVisibility.startIndex, arrayVisibility.endIndex).map((child, i) => {
-          const actualIndex = arrayVisibility.startIndex + i;
+      // Virtualized: only mount visible slice
+      ? childArray.slice(visibility.startIndex, visibility.endIndex).map((child, i) => {
+          const actualIndex = visibility.startIndex + i;
           return React.createElement(
             "box" as any,
             {
               key: actualIndex,
               ref: (node: GlyphNode | null) => {
-                if (node) {
-                  itemRefsRef.current.set(actualIndex, node);
-                } else {
-                  itemRefsRef.current.delete(actualIndex);
-                }
+                if (node) itemRefsRef.current.set(actualIndex, node);
+                else itemRefsRef.current.delete(actualIndex);
               },
             },
-            child
+            child,
           );
         })
-      : (children as ReactNode);
+      : isArrayMode
+        // Non-virtualized: mount ALL children, wrapped for ref tracking
+        ? childArray.map((child, i) =>
+            React.createElement(
+              "box" as any,
+              {
+                key: i,
+                ref: (node: GlyphNode | null) => {
+                  if (node) itemRefsRef.current.set(i, node);
+                  else itemRefsRef.current.delete(i);
+                },
+              },
+              child,
+            ),
+          )
+        : (children as ReactNode);
 
-  // Measure item heights after render (for array virtualization)
+  // ── Measure item heights after render (virtualized only) ──
   const [, forceUpdate] = useState(0);
   useEffect(() => {
     if (!isArrayVirtualized || !layoutCtx) return;
-    
+
     let needsUpdate = false;
     for (const [index, node] of itemRefsRef.current) {
       const layout = layoutCtx.getLayout(node);
       const measuredHeight = layout.height || estimatedItemHeight;
       const currentHeight = measuredHeightsRef.current.get(index);
-      
+
       if (currentHeight !== measuredHeight) {
         measuredHeightsRef.current.set(index, measuredHeight);
         needsUpdate = true;
       }
     }
-    
-    // Trigger re-render if heights changed to recalculate total content height
+
     if (needsUpdate) {
-      forceUpdate(n => n + 1);
+      forceUpdate((n) => n + 1);
     }
   });
 
-  // Calculate scrollbar dimensions
+  // ── Scrollbar ──
   const isScrollable = contentHeight > viewportHeight && viewportHeight > 0;
   const scrollbarVisible = showScrollbar && isScrollable;
-  
-  // Scrollbar thumb size and position
+
   const thumbHeight = Math.max(1, Math.floor((viewportHeight / contentHeight) * viewportHeight));
   const scrollableRange = contentHeight - viewportHeight;
-  const thumbPosition = scrollableRange > 0 
+  const thumbPosition = scrollableRange > 0
     ? Math.floor((effectiveOffset / scrollableRange) * (viewportHeight - thumbHeight))
     : 0;
 
-  // Build scrollbar characters
   const scrollbarChars: string[] = [];
   if (scrollbarVisible) {
     for (let i = 0; i < viewportHeight; i++) {
-      if (i >= thumbPosition && i < thumbPosition + thumbHeight) {
-        scrollbarChars.push("█");
-      } else {
-        scrollbarChars.push("░");
-      }
+      scrollbarChars.push(i >= thumbPosition && i < thumbPosition + thumbHeight ? "█" : "░");
     }
   }
 
-  // Scrollbar style - positioned on the right edge
   const scrollbarStyle: Style = {
     position: "absolute" as const,
     top: 0,
@@ -580,6 +824,7 @@ export function ScrollView({
     flexDirection: "column" as const,
   };
 
+  // ── Render tree ──
   return React.createElement(
     ScrollViewContext.Provider,
     { value: scrollViewContextValue },
@@ -587,27 +832,35 @@ export function ScrollView({
       "box" as any,
       {
         style: outerStyle,
-        ref: (node: any) => {
-          viewportRef.current = node ?? null;
-        },
+        ref: (node: any) => { viewportRef.current = node ?? null; },
         ...(focusable ? { focusable: true, focusId } : {}),
       },
-      // Content (absolutely positioned, scrolls via top offset)
+      // Content wrapper — absolute so it doesn't push the outer box's height.
       React.createElement(
         "box" as any,
         {
           style: {
-            ...innerStyle,
-            // Reserve space for scrollbar when visible
-            paddingRight: scrollbarVisible ? ((innerStyle.paddingRight ?? 0) as number) + 1 : innerStyle.paddingRight,
+            position: "absolute" as const,
+            top: contentTop,
+            left: 0,
+            right: 0,
+            flexDirection: "column" as const,
+            ...paddingProps,
+            // Reserve space for scrollbar
+            paddingRight: scrollbarVisible
+              ? ((paddingProps.paddingRight ?? 0) as number) + 1
+              : paddingProps.paddingRight,
           },
           ref: (node: any) => {
             contentRef.current = node ?? null;
+            if (node) {
+              nodeScrollContextMap.set(node, scrollViewContextValue);
+            }
           },
         },
         renderedChildren,
       ),
-      // Scrollbar
+      // Scrollbar overlay
       scrollbarVisible && React.createElement(
         "box" as any,
         { style: scrollbarStyle },
@@ -619,4 +872,95 @@ export function ScrollView({
       ),
     ),
   );
+});
+
+// ── Helpers ──
+
+/** Check if `node` is a descendant of `ancestor`. */
+function isDescendantOf(node: GlyphNode, ancestor: GlyphNode): boolean {
+  let cur: GlyphNode | null = node;
+  while (cur) {
+    if (cur === ancestor) return true;
+    cur = cur.parent;
+  }
+  return false;
+}
+
+/** Walk `root` to find the GlyphNode whose `focusId` matches. */
+function findFocusIdInTree(root: GlyphNode, focusId: string): GlyphNode | null {
+  if (root.focusId === focusId) return root;
+  for (const child of root.children) {
+    const found = findFocusIdInTree(child, focusId);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Check whether `focusId` exists anywhere in `node`'s subtree. */
+function hasFocusId(node: GlyphNode, focusId: string): boolean {
+  if (node.focusId === focusId) return true;
+  for (const child of node.children) {
+    if (hasFocusId(child, focusId)) return true;
+  }
+  return false;
+}
+
+/** Find the first `focusId` in `node`'s subtree (depth-first). */
+function findFirstFocusId(node: GlyphNode): string | null {
+  if (node.focusId) return node.focusId;
+  for (const child of node.children) {
+    const found = findFirstFocusId(child);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * When Tab exits a ScrollView, find the next focusable element
+ * OUTSIDE this ScrollView (and outside the viewport box itself).
+ *
+ * Uses the viewport box's stable position (not affected by scrolling)
+ * to pick the correct target for side-by-side or stacked layouts.
+ */
+function findExternalFocusTarget(
+  contentNode: GlyphNode,
+  viewportNode: GlyphNode | null,
+  focusCtx: FocusContextValue,
+  direction: "forward" | "backward",
+): string | null {
+  const allElements = focusCtx.getActiveElements();
+
+  // Filter to elements NOT inside this ScrollView
+  const external = allElements.filter(({ node }) =>
+    node !== viewportNode && !isDescendantOf(node, contentNode),
+  );
+
+  if (external.length === 0) return null;
+
+  // Sort by visual position (same algorithm as the focus system)
+  external.sort((a, b) => {
+    if (a.node.layout.y !== b.node.layout.y) return a.node.layout.y - b.node.layout.y;
+    return a.node.layout.x - b.node.layout.x;
+  });
+
+  // Reference point: the viewport box's stable position
+  const vY = viewportNode?.layout.y ?? 0;
+  const vX = viewportNode?.layout.x ?? 0;
+
+  if (direction === "forward") {
+    // First external element visually after the viewport
+    const idx = external.findIndex(({ node }) =>
+      node.layout.y > vY || (node.layout.y === vY && node.layout.x > vX),
+    );
+    return external[idx !== -1 ? idx : 0]?.id ?? null;
+  } else {
+    // Last external element visually before the viewport
+    for (let i = external.length - 1; i >= 0; i--) {
+      const { node } = external[i]!;
+      if (node.layout.y < vY || (node.layout.y === vY && node.layout.x < vX)) {
+        return external[i]!.id;
+      }
+    }
+    return external[external.length - 1]?.id ?? null;
+  }
 }

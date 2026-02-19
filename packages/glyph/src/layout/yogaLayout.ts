@@ -310,13 +310,31 @@ function extractLayout(
       const dw = width - prev.width;
       const dh = height - prev.height;
       node._prevLayout = prev;
-      node.layout = {
-        x, y, width, height,
-        innerX: prev.innerX + dx,
-        innerY: prev.innerY + dy,
-        innerWidth: prev.innerWidth + dw,
-        innerHeight: prev.innerHeight + dh,
-      };
+
+      if (dw !== 0 || dh !== 0) {
+        const bw = node.resolvedStyle.border && node.resolvedStyle.border !== "none" ? 1 : 0;
+        const padTop = yn.getComputedPadding(Edge.Top);
+        const padRight = yn.getComputedPadding(Edge.Right);
+        const padBottom = yn.getComputedPadding(Edge.Bottom);
+        const padLeft = yn.getComputedPadding(Edge.Left);
+
+        node.layout = {
+          x, y, width, height,
+          innerX: x + bw + padLeft,
+          innerY: y + bw + padTop,
+          innerWidth: Math.max(0, width - bw * 2 - padLeft - padRight),
+          innerHeight: Math.max(0, height - bw * 2 - padTop - padBottom),
+        };
+      } else {
+        node.layout = {
+          x, y, width, height,
+          innerX: prev.innerX + dx,
+          innerY: prev.innerY + dy,
+          innerWidth: prev.innerWidth,
+          innerHeight: prev.innerHeight,
+        };
+      }
+
       node._paintDirty = true;
     }
     if (hasNew) markSubtreeLayoutSeen(node);
@@ -357,13 +375,40 @@ function extractLayout(
     const dh = height - prev.height;
     if (dx !== 0 || dy !== 0 || dw !== 0 || dh !== 0) {
       node._prevLayout = prev;
-      node.layout = {
-        x, y, width, height,
-        innerX: prev.innerX + dx,
-        innerY: prev.innerY + dy,
-        innerWidth: prev.innerWidth + dw,
-        innerHeight: prev.innerHeight + dh,
-      };
+
+      // When only position changed (dx/dy), inner dimensions stay the same
+      // — just shift innerX/innerY by the delta.
+      //
+      // When width or height changed (dw/dh), we MUST do a full inner
+      // computation from Yoga.  The delta approach (prev.innerWidth + dw)
+      // is only valid if prev was previously computed from the hasNew path.
+      // Nodes that have NEVER been fully extracted (e.g. brand new nodes
+      // entering the parentMoved path) have prev.inner* = 0 and the delta
+      // incorrectly gives innerWidth = width, ignoring padding/border.
+      if (dw !== 0 || dh !== 0) {
+        const bw = node.resolvedStyle.border && node.resolvedStyle.border !== "none" ? 1 : 0;
+        const padTop = yn.getComputedPadding(Edge.Top);
+        const padRight = yn.getComputedPadding(Edge.Right);
+        const padBottom = yn.getComputedPadding(Edge.Bottom);
+        const padLeft = yn.getComputedPadding(Edge.Left);
+
+        node.layout = {
+          x, y, width, height,
+          innerX: x + bw + padLeft,
+          innerY: y + bw + padTop,
+          innerWidth: Math.max(0, width - bw * 2 - padLeft - padRight),
+          innerHeight: Math.max(0, height - bw * 2 - padTop - padBottom),
+        };
+      } else {
+        node.layout = {
+          x, y, width, height,
+          innerX: prev.innerX + dx,
+          innerY: prev.innerY + dy,
+          innerWidth: prev.innerWidth,
+          innerHeight: prev.innerHeight,
+        };
+      }
+
       node._paintDirty = true;
       layoutChanged = true;
     }

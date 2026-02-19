@@ -52,6 +52,8 @@ export { HelpDialog } from "./components/HelpDialog.js";
 export type { HelpDialogProps } from "./components/HelpDialog.js";
 export { StatusBar, useStatusBar } from "./components/StatusBar.js";
 export type { StatusBarProps, StatusBarMessage, StatusBarContextValue, MessageType } from "./components/StatusBar.js";
+export { DebugOverlay } from "./components/DebugOverlay.js";
+export type { DebugOverlayProps } from "./components/DebugOverlay.js";
 
 // Hooks
 export { useInput } from "./hooks/useInput.js";

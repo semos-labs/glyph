@@ -18,6 +18,8 @@ export interface UseAppResult {
   lastFrameTime: number;
   /** Per-phase breakdown of the last frame's render time. */
   frameTiming: FrameTiming;
+  /** Whether debug mode is enabled via `render(element, { debug: true })`. */
+  debug: boolean;
 }
 
 /**
@@ -67,5 +69,6 @@ export function useApp(): UseAppResult {
     rows,
     lastFrameTime: ctx.lastFrameTime,
     frameTiming: ctx.frameTiming,
+    debug: ctx.debug,
   };
 }

@@ -379,6 +379,7 @@ export function render(
       get frameTiming() {
         return frameTiming;
       },
+      debug,
     };
 
     // ---- Container ----

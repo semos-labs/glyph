@@ -89,6 +89,8 @@ export interface AppContextValue {
   lastFrameTime: number;
   /** Per-phase breakdown of the last frame's render time. */
   frameTiming: FrameTiming;
+  /** Whether debug mode is enabled via `render(element, { debug: true })`. */
+  debug: boolean;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

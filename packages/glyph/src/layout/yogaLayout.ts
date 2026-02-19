@@ -272,32 +272,23 @@ function extractLayout(
   if (hasNew) yn.markLayoutSeen();
 
   // ── Step 1: Determine absolute position ──
-  let x: number, y: number, width: number, height: number;
-
-  if (hasNew) {
-    const cl = yn.getComputedLayout();
-    x = parentX + cl.left;
-    y = parentY + cl.top;
-    width = cl.width;
-    height = cl.height;
-    node._relLeft = cl.left;
-    node._relTop = cl.top;
-  } else {
-    // parentMoved — the node itself wasn't recalculated, but its parent
-    // shifted so its absolute position changed.  Use cached relative
-    // offsets for position, but ALWAYS read dimensions from Yoga.
-    //
-    // We cannot use prev.width/prev.height because newly-created nodes
-    // (e.g. unique-key list items) may enter this branch with stale
-    // default layout {0,0,0,0} if Yoga didn't flag hasNewLayout for
-    // them (it flags the *parent* that gained new children, but
-    // children whose own computed values haven't changed from Yoga's
-    // initial defaults may not get the flag).
-    x = parentX + node._relLeft;
-    y = parentY + node._relTop;
-    width = yn.getComputedWidth();
-    height = yn.getComputedHeight();
-  }
+  // Always read position + dimensions from Yoga.  Previously the
+  // parentMoved-only branch used cached _relLeft/_relTop, but Yoga
+  // doesn't always set hasNewLayout for newly-inserted children whose
+  // computed values happen to match Yoga's initial defaults.  Those
+  // nodes enter the else branch with stale _relLeft/_relTop = 0,
+  // causing all virtualized items to stack at the parent's origin
+  // (only item 0 appears correct because its actual offset IS 0).
+  // Reading from Yoga unconditionally costs two extra WASM reads per
+  // parentMoved node but is negligible in practice (~20 nodes per
+  // scroll tick) and eliminates the stale-offset class of bugs.
+  const cl = yn.getComputedLayout();
+  const x = parentX + cl.left;
+  const y = parentY + cl.top;
+  const width = cl.width;
+  const height = cl.height;
+  node._relLeft = cl.left;
+  node._relTop = cl.top;
 
   // ── Step 2: Clip cull ──
   if (clip &&
@@ -366,7 +357,14 @@ function extractLayout(
       // cover content from nodes underneath that won't be dirty.  Push the
       // old rect as a stale rect so Pass 0 clears it and marks underlying
       // entries dirty for repaint (e.g. Select dropdown shrinking on filter).
-      if (prev && prev.width > 0 && prev.height > 0 &&
+      //
+      // SKIP when inside a clip container (clip != null): the viewport fill
+      // already clears the entire clipped area every frame, and the clip
+      // prevents the node from painting outside it.  Pushing stale rects
+      // for the ScrollView inner content box (which moves on EVERY scroll)
+      // would force a full-viewport repaint of ALL overlapping entries
+      // (sidebar, toolbar, etc.) — wasteful and can cause flicker.
+      if (!clip && prev && prev.width > 0 && prev.height > 0 &&
           node.resolvedStyle.position === "absolute") {
         pendingStaleRects.push({ x: prev.x, y: prev.y, width: prev.width, height: prev.height });
       }
@@ -383,7 +381,7 @@ function extractLayout(
     const dh = height - prev.height;
     if (dx !== 0 || dy !== 0 || dw !== 0 || dh !== 0) {
       // Same absolute-overlay stale rect logic as the hasNew branch above.
-      if (prev.width > 0 && prev.height > 0 &&
+      if (!clip && prev.width > 0 && prev.height > 0 &&
           node.resolvedStyle.position === "absolute") {
         pendingStaleRects.push({ x: prev.x, y: prev.y, width: prev.width, height: prev.height });
       }

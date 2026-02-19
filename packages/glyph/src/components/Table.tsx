@@ -106,12 +106,12 @@ function HorizontalRule({
       );
     }
     // Horizontal fill ─────
-    // width:0 forces flex-basis to 0 so the grow algorithm distributes
-    // space identically to the cell-wrapper boxes in the content row.
+    // flexBasis:0 ensures the grow algorithm distributes space
+    // identically to the cell-wrapper boxes in the content row.
     items.push(
       React.createElement(
         "box" as any,
-        { key: `f${i}`, style: { flexGrow: 1, width: 0 } },
+        { key: `f${i}`, style: { flexGrow: 1, flexBasis: 0 } },
         React.createElement(
           "text" as any,
           { style: fillStyle },
@@ -277,12 +277,15 @@ export function TableRow(props: TableRowProps): ReactElement {
         React.createElement("text" as any, { key: `vs${i}`, style: colorStyle }, chars.vertical),
       );
     }
-    // Cell wrapper — width:0 + flexGrow:1 gives every column an equal
-    // share of the remaining space (same as the fill boxes above).
+    // Cell wrapper — flexBasis:0 + flexGrow:1 gives every column an
+    // equal share of the remaining space (matching the fill boxes).
+    // Unlike width:0, flexBasis:0 lets Yoga measure children at the
+    // resolved (post-grow) width, so text wraps at the real column
+    // width instead of 0.
     contentItems.push(
       React.createElement(
         "box" as any,
-        { key: `c${i}`, style: { flexGrow: 1, width: 0 } },
+        { key: `c${i}`, style: { flexGrow: 1, flexBasis: 0 } },
         cells[i],
       ),
     );

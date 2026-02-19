@@ -20,6 +20,7 @@ import {
   EMPTY_STYLE,
   shallowStyleEqual,
   markLayoutDirty,
+  collectStaleRects,
 } from "./nodes.js";
 import type { Style } from "../types/index.js";
 
@@ -266,6 +267,9 @@ export const hostConfig = {
   ): void {
     if (child.type === "raw-text") return;
     const node = child as GlyphNode;
+    // Save the removed subtree's screen area for stale-rect clearing
+    // (same as removeChild — needed for overlays like JumpNav at root level)
+    collectStaleRects(node);
     // Sync Yoga tree — detach from Yoga parent first
     if (container.yogaNode && node.yogaNode) {
       const parent = node.yogaNode.getParent();
@@ -273,6 +277,7 @@ export const hostConfig = {
     }
     // Free the entire Yoga subtree synchronously (same rationale as removeChild)
     freeYogaSubtree(node);
+    markLayoutDirty();
     const idx = container.children.indexOf(node);
     if (idx !== -1) {
       container.children.splice(idx, 1);

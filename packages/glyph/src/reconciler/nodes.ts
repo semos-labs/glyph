@@ -94,7 +94,7 @@ export function resetLayoutDirty(): void { _layoutDirty = false; }
  * Walk a subtree and push every non-zero layout rect into
  * {@link pendingStaleRects} so the painter can clear those screen areas.
  */
-function collectStaleRects(node: GlyphNode): void {
+export function collectStaleRects(node: GlyphNode): void {
   const { x, y, width, height } = node.layout;
   if (width > 0 && height > 0) {
     pendingStaleRects.push({ x, y, width, height });

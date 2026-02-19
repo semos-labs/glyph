@@ -291,8 +291,14 @@ export const hostConfig = {
         .map((t) => t.text)
         .join("");
       textInstance.parent._paintDirty = true;
-      // Only mark Yoga dirty when text length changes (measurement may differ)
-      if (textInstance.parent.yogaNode && _oldText.length !== newText.length) {
+      // Only mark Yoga dirty when text length changes (measurement may differ).
+      // Guard: markDirty() requires the Yoga node to be a leaf with a measure
+      // function.  Only `text` and `input` GlyphNodes satisfy this — a `box`
+      // parent with both raw-text and element children would crash Yoga's
+      // assertion ("Only leaf nodes with custom measure functions…").
+      if (textInstance.parent.yogaNode &&
+          textInstance.parent._hasMeasureFunc &&
+          _oldText.length !== newText.length) {
         textInstance.parent.yogaNode.markDirty();
         markLayoutDirty();
       }

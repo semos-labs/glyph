@@ -283,11 +283,20 @@ function extractLayout(
     node._relLeft = cl.left;
     node._relTop = cl.top;
   } else {
-    const prev = node.layout!;
+    // parentMoved — the node itself wasn't recalculated, but its parent
+    // shifted so its absolute position changed.  Use cached relative
+    // offsets for position, but ALWAYS read dimensions from Yoga.
+    //
+    // We cannot use prev.width/prev.height because newly-created nodes
+    // (e.g. unique-key list items) may enter this branch with stale
+    // default layout {0,0,0,0} if Yoga didn't flag hasNewLayout for
+    // them (it flags the *parent* that gained new children, but
+    // children whose own computed values haven't changed from Yoga's
+    // initial defaults may not get the flag).
     x = parentX + node._relLeft;
     y = parentY + node._relTop;
-    width = prev.width;
-    height = prev.height;
+    width = yn.getComputedWidth();
+    height = yn.getComputedHeight();
   }
 
   // ── Step 2: Clip cull ──
@@ -298,13 +307,15 @@ function extractLayout(
     if (prev && (prev.x !== x || prev.y !== y || prev.width !== width || prev.height !== height)) {
       const dx = x - prev.x;
       const dy = y - prev.y;
+      const dw = width - prev.width;
+      const dh = height - prev.height;
       node._prevLayout = prev;
       node.layout = {
         x, y, width, height,
         innerX: prev.innerX + dx,
         innerY: prev.innerY + dy,
-        innerWidth: prev.innerWidth,
-        innerHeight: prev.innerHeight,
+        innerWidth: prev.innerWidth + dw,
+        innerHeight: prev.innerHeight + dh,
       };
       node._paintDirty = true;
     }
@@ -342,16 +353,16 @@ function extractLayout(
     const prev = node.layout!;
     const dx = x - prev.x;
     const dy = y - prev.y;
-    if (dx !== 0 || dy !== 0) {
+    const dw = width - prev.width;
+    const dh = height - prev.height;
+    if (dx !== 0 || dy !== 0 || dw !== 0 || dh !== 0) {
       node._prevLayout = prev;
       node.layout = {
-        x, y,
-        width: prev.width,
-        height: prev.height,
+        x, y, width, height,
         innerX: prev.innerX + dx,
         innerY: prev.innerY + dy,
-        innerWidth: prev.innerWidth,
-        innerHeight: prev.innerHeight,
+        innerWidth: prev.innerWidth + dw,
+        innerHeight: prev.innerHeight + dh,
       };
       node._paintDirty = true;
       layoutChanged = true;

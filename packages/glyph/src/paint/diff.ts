@@ -205,7 +205,7 @@ export function diffFramebuffers(
   }
 
   // End synchronized update — terminal paints everything at once.
-  writeAscii(`${CSI}?2026l`);
+  // writeAscii(`${CSI}?2026l`); // DISABLED: testing DEC 2026 off
 
   // Track output size for diagnostics (helps detect frames that might
   // overwhelm a terminal's sync buffer).

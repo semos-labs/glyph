@@ -169,6 +169,8 @@ export interface Style {
   flexGrow?: Responsive<number>;
   /** How much this element shrinks when space is tight (default `1`). */
   flexShrink?: Responsive<number>;
+  /** Initial main-axis size before flex grow/shrink. Overrides `width`/`height` for flex calculations. */
+  flexBasis?: Responsive<DimensionValue>;
 
   // ── Positioning / overlays ───────────────────────────────────
   /** Positioning mode. `"absolute"` elements are taken out of flow. */

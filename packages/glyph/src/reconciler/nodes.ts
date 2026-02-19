@@ -2,6 +2,23 @@ import Yoga from "yoga-layout";
 import type { Node as YogaNode } from "yoga-layout";
 import type { Style, ResolvedStyle, LayoutRect, Color } from "../types/index.js";
 
+/**
+ * Shared Yoga configuration with pixel-grid rounding disabled.
+ *
+ * Yoga's built-in rounding (`pointScaleFactor = 1`) rounds each node's
+ * `left` and `width` independently which can create 1-pixel gaps or
+ * overlaps between siblings whose positions fall on fractional boundaries.
+ *
+ * By setting `pointScaleFactor = 0` we receive raw float positions and
+ * apply our own edge-based rounding in {@link extractLayout} (in
+ * `yogaLayout.ts`), which guarantees adjacent siblings share the same
+ * rounded edge — zero gaps, zero overlaps.
+ *
+ * @internal
+ */
+export const yogaConfig = Yoga.Config.create();
+yogaConfig.setPointScaleFactor(0);
+
 export type GlyphNodeType = "box" | "text" | "input";
 
 /**
@@ -45,6 +62,10 @@ export interface GlyphNode {
   _relLeft: number;
   /** @internal Cached Yoga relative top offset (avoids WASM reads when parent moved). */
   _relTop: number;
+  /** @internal Raw (unrounded) absolute X from Yoga. Used to propagate sub-pixel precision to children. */
+  _rawAbsX: number;
+  /** @internal Raw (unrounded) absolute Y from Yoga. Used to propagate sub-pixel precision to children. */
+  _rawAbsY: number;
   /** @internal Cached text rasterization result (managed by painter.ts). */
   _textCache: any;
 }
@@ -124,7 +145,7 @@ export function createGlyphNode(
     rawTextChildren: [],
     allChildren: [],
     parent: null,
-    yogaNode: Yoga.Node.create(),
+    yogaNode: Yoga.Node.createWithConfig(yogaConfig),
     text: null,
     layout: { x: 0, y: 0, width: 0, height: 0, innerX: 0, innerY: 0, innerWidth: 0, innerHeight: 0 },
     focusId: type === "input" ? generateFocusId() : (props.focusable ? generateFocusId() : null),
@@ -137,6 +158,8 @@ export function createGlyphNode(
     _prevLayout: null,
     _relLeft: 0,
     _relTop: 0,
+    _rawAbsX: 0,
+    _rawAbsY: 0,
     _textCache: null,
   };
 }

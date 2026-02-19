@@ -11,7 +11,7 @@ import Yoga, {
 } from "yoga-layout";
 import type { Node as YogaNode } from "yoga-layout";
 import type { GlyphNode } from "../reconciler/nodes.js";
-import { isLayoutDirty, resetLayoutDirty, pendingStaleRects } from "../reconciler/nodes.js";
+import { isLayoutDirty, resetLayoutDirty, pendingStaleRects, yogaConfig } from "../reconciler/nodes.js";
 import type { ResolvedStyle, DimensionValue } from "../types/index.js";
 import { measureText } from "./textMeasure.js";
 import { resolveNodeStyles } from "./responsive.js";
@@ -92,6 +92,7 @@ function resetYogaNode(yogaNode: YogaNode): void {
   yogaNode.setAlignItems(Align.Stretch);
   yogaNode.setFlexGrow(0);
   yogaNode.setFlexShrink(0);
+  yogaNode.setFlexBasis("auto" as any);
 
   yogaNode.setGap(Gutter.All, 0);
 
@@ -145,6 +146,9 @@ function applyStyleToYogaNode(yogaNode: YogaNode, style: ResolvedStyle, nodeType
   }
   if (style.flexGrow !== undefined) yogaNode.setFlexGrow(style.flexGrow);
   if (style.flexShrink !== undefined) yogaNode.setFlexShrink(style.flexShrink);
+  if (style.flexBasis !== undefined) {
+    setDimension(yogaNode, (v) => yogaNode.setFlexBasis(v as any), style.flexBasis);
+  }
 
   // Gap
   if (style.gap !== undefined) yogaNode.setGap(Gutter.All, style.gap);
@@ -252,8 +256,8 @@ function markSubtreeLayoutSeen(node: GlyphNode): void {
 
 function extractLayout(
   node: GlyphNode,
-  parentX: number,
-  parentY: number,
+  parentRawX: number,
+  parentRawY: number,
   parentMoved: boolean,
   clip: LayoutClip | null,
 ): void {
@@ -264,7 +268,7 @@ function extractLayout(
   if (!hasNew && !parentMoved) {
     for (const child of node.children) {
       if (child.hidden || !child.yogaNode) continue;
-      extractLayout(child, node.layout!.x, node.layout!.y, false, clip);
+      extractLayout(child, node._rawAbsX, node._rawAbsY, false, clip);
     }
     return;
   }
@@ -282,13 +286,23 @@ function extractLayout(
   // Reading from Yoga unconditionally costs two extra WASM reads per
   // parentMoved node but is negligible in practice (~20 nodes per
   // scroll tick) and eliminates the stale-offset class of bugs.
+  //
+  // With pointScaleFactor=0 (see nodes.ts), Yoga returns raw floats.
+  // We round using the "edge-based" approach: round(absoluteLeft) for
+  // position, then round(absoluteRight) − round(absoluteLeft) for
+  // width.  This guarantees adjacent siblings share the same rounded
+  // edge — zero gaps, zero overlaps.
   const cl = yn.getComputedLayout();
-  const x = parentX + cl.left;
-  const y = parentY + cl.top;
-  const width = cl.width;
-  const height = cl.height;
+  const rawX = parentRawX + cl.left;
+  const rawY = parentRawY + cl.top;
+  const x = Math.round(rawX);
+  const y = Math.round(rawY);
+  const width = Math.round(rawX + cl.width) - x;
+  const height = Math.round(rawY + cl.height) - y;
   node._relLeft = cl.left;
   node._relTop = cl.top;
+  node._rawAbsX = rawX;
+  node._rawAbsY = rawY;
 
   // ── Step 2: Clip cull ──
   if (clip &&
@@ -304,10 +318,10 @@ function extractLayout(
 
       if (dw !== 0 || dh !== 0) {
         const bw = node.resolvedStyle.border && node.resolvedStyle.border !== "none" ? 1 : 0;
-        const padTop = yn.getComputedPadding(Edge.Top);
-        const padRight = yn.getComputedPadding(Edge.Right);
-        const padBottom = yn.getComputedPadding(Edge.Bottom);
-        const padLeft = yn.getComputedPadding(Edge.Left);
+        const padTop = Math.round(yn.getComputedPadding(Edge.Top));
+        const padRight = Math.round(yn.getComputedPadding(Edge.Right));
+        const padBottom = Math.round(yn.getComputedPadding(Edge.Bottom));
+        const padLeft = Math.round(yn.getComputedPadding(Edge.Left));
 
         node.layout = {
           x, y, width, height,
@@ -337,10 +351,10 @@ function extractLayout(
 
   if (hasNew) {
     const bw = node.resolvedStyle.border && node.resolvedStyle.border !== "none" ? 1 : 0;
-    const padTop = yn.getComputedPadding(Edge.Top);
-    const padRight = yn.getComputedPadding(Edge.Right);
-    const padBottom = yn.getComputedPadding(Edge.Bottom);
-    const padLeft = yn.getComputedPadding(Edge.Left);
+    const padTop = Math.round(yn.getComputedPadding(Edge.Top));
+    const padRight = Math.round(yn.getComputedPadding(Edge.Right));
+    const padBottom = Math.round(yn.getComputedPadding(Edge.Bottom));
+    const padLeft = Math.round(yn.getComputedPadding(Edge.Left));
 
     const innerX = x + bw + padLeft;
     const innerY = y + bw + padTop;
@@ -398,10 +412,10 @@ function extractLayout(
       // incorrectly gives innerWidth = width, ignoring padding/border.
       if (dw !== 0 || dh !== 0) {
         const bw = node.resolvedStyle.border && node.resolvedStyle.border !== "none" ? 1 : 0;
-        const padTop = yn.getComputedPadding(Edge.Top);
-        const padRight = yn.getComputedPadding(Edge.Right);
-        const padBottom = yn.getComputedPadding(Edge.Bottom);
-        const padLeft = yn.getComputedPadding(Edge.Left);
+        const padTop = Math.round(yn.getComputedPadding(Edge.Top));
+        const padRight = Math.round(yn.getComputedPadding(Edge.Right));
+        const padBottom = Math.round(yn.getComputedPadding(Edge.Bottom));
+        const padLeft = Math.round(yn.getComputedPadding(Edge.Left));
 
         node.layout = {
           x, y, width, height,
@@ -438,9 +452,11 @@ function extractLayout(
     }
   }
 
+  // Pass raw (unrounded) absolute position to children so their
+  // edge-based rounding stays sub-pixel-accurate across the tree.
   for (const child of node.children) {
     if (child.hidden || !child.yogaNode) continue;
-    extractLayout(child, node.layout!.x, node.layout!.y, layoutChanged, childClip);
+    extractLayout(child, rawX, rawY, layoutChanged, childClip);
   }
 }
 
@@ -449,7 +465,7 @@ function extractLayout(
 
 /** Create the persistent root Yoga node for the terminal screen. */
 export function createRootYogaNode(): YogaNode {
-  const node = Yoga.Node.create();
+  const node = Yoga.Node.createWithConfig(yogaConfig);
   node.setFlexDirection(FlexDirection.Column);
   return node;
 }

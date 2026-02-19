@@ -58,6 +58,14 @@ export function paintTree(
     pendingStaleRects.length = 0;
   }
 
+  // Snapshot stale rects BEFORE collecting entries so collectPaintEntries
+  // can check overlap and propagate ancestorDirty correctly through clip
+  // containers (setting entry.dirty post-hoc doesn't propagate to children).
+  let staleRectsSnapshot: typeof pendingStaleRects | null = null;
+  if (!full && pendingStaleRects.length > 0) {
+    staleRectsSnapshot = pendingStaleRects.slice();
+  }
+
   const result: PaintResult = {};
 
   // Collect all nodes with their z-index for proper ordering
@@ -67,7 +75,7 @@ export function paintTree(
 
   for (const root of roots) {
     if (root.hidden) continue;
-    collectPaintEntries(root, screenClip, root.resolvedStyle.zIndex ?? 0, entries, false);
+    collectPaintEntries(root, screenClip, root.resolvedStyle.zIndex ?? 0, entries, false, staleRectsSnapshot);
   }
   perf.collectEntries = performance.now() - tCollect0;
 
@@ -95,6 +103,7 @@ export function paintTree(
   // dropdowns, tooltips, dialogs) the removed area falls OUTSIDE the
   // parent's layout rect, so marking the parent dirty alone won't clear it.
   // Drain the pending list and erase those screen areas now.
+  // ── Pass 0: Clear areas of removed/resized absolute overlays ──
   if (!full && pendingStaleRects.length > 0) {
     for (const rect of pendingStaleRects) {
       for (let row = rect.y; row < rect.y + rect.height; row++) {
@@ -106,24 +115,9 @@ export function paintTree(
         }
       }
     }
-    // Mark any surviving entries that overlap the cleared areas as dirty
-    // so they get repainted in Pass 2 (otherwise the content that was
-    // UNDER the removed overlay stays blank).
-    for (const entry of entries) {
-      if (entry.dirty) continue; // already dirty
-      const { x, y, width, height } = entry.node.layout;
-      for (const rect of pendingStaleRects) {
-        if (
-          x < rect.x + rect.width &&
-          x + width > rect.x &&
-          y < rect.y + rect.height &&
-          y + height > rect.y
-        ) {
-          entry.dirty = true;
-          break;
-        }
-      }
-    }
+    // Overlap marking is handled inside collectPaintEntries (via the
+    // staleRects parameter) so that ancestorDirty propagates correctly
+    // through clip containers and their descendants.
     pendingStaleRects.length = 0;
   }
 
@@ -139,7 +133,13 @@ export function paintTree(
       const prev = node._prevLayout;
       if (prev) {
         // Case 1: Node MOVED/RESIZED — clear the OLD rect so ghost pixels vanish.
-        if (prev.width > 0 && prev.height > 0) {
+        // For absolute-positioned nodes, Pass 0 already cleared the stale area
+        // via pendingStaleRects (with bg=undefined).  Re-clearing here would
+        // overwrite those cells with inherited.bg — which is the OVERLAY's
+        // ancestor bg (e.g. gray), not the content that was underneath.
+        // Skip for absolute nodes to avoid re-painting wrong colors.
+        if (prev.width > 0 && prev.height > 0 &&
+            node.resolvedStyle.position !== "absolute") {
           for (let row = prev.y; row < prev.y + prev.height; row++) {
             for (let col = prev.x; col < prev.x + prev.width; col++) {
               if (isInClip(col, row, entry.clip)) {
@@ -236,6 +236,7 @@ function collectPaintEntries(
   parentZ: number,
   entries: PaintEntry[],
   ancestorDirty: boolean,
+  staleRects?: Array<{ x: number; y: number; width: number; height: number }> | null,
 ): void {
   if (node.hidden) return;
 
@@ -257,6 +258,25 @@ function collectPaintEntries(
   const zIndex = node.resolvedStyle.zIndex ?? parentZ;
   // A node is "dirty" if it or any ancestor is dirty
   let dirty = node._paintDirty || ancestorDirty;
+
+  // If the node overlaps a stale rect (from a removed or resized absolute
+  // overlay), treat it as dirty so it gets repainted.  Checking here
+  // (instead of post-hoc on the entries array) ensures ancestorDirty
+  // propagates correctly to descendants — critical for clip containers
+  // whose viewport fill wipes everything.
+  if (!dirty && staleRects) {
+    for (const rect of staleRects) {
+      if (
+        x < rect.x + rect.width &&
+        x + width > rect.x &&
+        y < rect.y + rect.height &&
+        y + height > rect.y
+      ) {
+        dirty = true;
+        break;
+      }
+    }
+  }
 
   // Clip containers (e.g. ScrollView) must repaint their viewport fill
   // whenever ANY descendant changes — the clip fill wipes the entire
@@ -290,7 +310,7 @@ function collectPaintEntries(
   // Children - skip for text/input (leaf nodes for painting)
   if (node.type !== "text" && node.type !== "input") {
     for (const child of node.children) {
-      collectPaintEntries(child, childClip, zIndex, entries, dirty);
+      collectPaintEntries(child, childClip, zIndex, entries, dirty, staleRects);
     }
   }
 }

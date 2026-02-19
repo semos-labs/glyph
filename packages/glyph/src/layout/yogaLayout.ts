@@ -11,7 +11,7 @@ import Yoga, {
 } from "yoga-layout";
 import type { Node as YogaNode } from "yoga-layout";
 import type { GlyphNode } from "../reconciler/nodes.js";
-import { isLayoutDirty, resetLayoutDirty } from "../reconciler/nodes.js";
+import { isLayoutDirty, resetLayoutDirty, pendingStaleRects } from "../reconciler/nodes.js";
 import type { ResolvedStyle, DimensionValue } from "../types/index.js";
 import { measureText } from "./textMeasure.js";
 import { resolveNodeStyles } from "./responsive.js";
@@ -362,6 +362,14 @@ function extractLayout(
         prev.width !== width || prev.height !== height ||
         prev.innerX !== innerX || prev.innerY !== innerY ||
         prev.innerWidth !== innerWidth || prev.innerHeight !== innerHeight) {
+      // For absolute-positioned nodes that moved/resized, the old area may
+      // cover content from nodes underneath that won't be dirty.  Push the
+      // old rect as a stale rect so Pass 0 clears it and marks underlying
+      // entries dirty for repaint (e.g. Select dropdown shrinking on filter).
+      if (prev && prev.width > 0 && prev.height > 0 &&
+          node.resolvedStyle.position === "absolute") {
+        pendingStaleRects.push({ x: prev.x, y: prev.y, width: prev.width, height: prev.height });
+      }
       node._prevLayout = prev;
       node.layout = { x, y, width, height, innerX, innerY, innerWidth, innerHeight };
       node._paintDirty = true;
@@ -374,6 +382,11 @@ function extractLayout(
     const dw = width - prev.width;
     const dh = height - prev.height;
     if (dx !== 0 || dy !== 0 || dw !== 0 || dh !== 0) {
+      // Same absolute-overlay stale rect logic as the hasNew branch above.
+      if (prev.width > 0 && prev.height > 0 &&
+          node.resolvedStyle.position === "absolute") {
+        pendingStaleRects.push({ x: prev.x, y: prev.y, width: prev.width, height: prev.height });
+      }
       node._prevLayout = prev;
 
       // When only position changed (dx/dy), inner dimensions stay the same

@@ -4,16 +4,31 @@ import {
   type BundledTheme,
 } from "shiki";
 
+/** A single token of highlighted code with optional styling. */
 export interface HighlightToken {
+  /** The text content of the token. */
   content: string;
+  /** Foreground color — either a Glyph named color or a hex string. */
   color?: string;
+  /** Whether the token should be rendered bold. */
   bold?: boolean;
+  /** Whether the token should be rendered italic. */
   italic?: boolean;
+  /** Whether the token should be rendered with underline. */
   underline?: boolean;
 }
 
+/**
+ * A syntax highlighter instance that tokenizes code strings.
+ *
+ * Created via {@link createHighlighter}. Can be passed to the `<Markdown>`
+ * component's `highlight` prop to share a single Shiki instance across
+ * multiple renders.
+ */
 export interface Highlighter {
+  /** Tokenize a code string into styled lines. */
   highlight(code: string, lang?: string): HighlightToken[][];
+  /** List of currently loaded language grammar IDs. */
   readonly loadedLanguages: string[];
 }
 
@@ -246,11 +261,27 @@ const DEFAULT_LANGS: BundledLanguage[] = [
  * terminal palette. Pass a `theme` name to use a Shiki built-in theme
  * with fixed hex colors instead.
  *
+ * The `<Markdown>` component handles this automatically — you only need
+ * `createHighlighter` when sharing a single instance across multiple
+ * components or when you need manual control.
+ *
+ * @param options - Optional theme and language configuration.
+ * @returns A {@link Highlighter} instance ready to tokenize code.
+ *
  * @example
  * ```ts
- * const highlighter = await createHighlighter();
- * <Markdown highlighter={highlighter}>{source}</Markdown>
+ * const hl = await createHighlighter();
+ * const tokens = hl.highlight("const x = 1;", "typescript");
  * ```
+ *
+ * @example
+ * ```ts
+ * // Share across multiple Markdown components
+ * const hl = await createHighlighter({ langs: ["tsx", "python"] });
+ * <Markdown highlight={hl}>{doc1}</Markdown>
+ * <Markdown highlight={hl}>{doc2}</Markdown>
+ * ```
+ * @category Markdown
  */
 export async function createHighlighter(
   options?: CreateHighlighterOptions,

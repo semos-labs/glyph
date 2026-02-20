@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "typeRoots": [
+      "./node_modules/@types",
+      "./packages/glyph/node_modules/@types"
+    ],
+    "paths": {
+      "@semos-labs/glyph": ["./packages/glyph/src/index.ts"],
+      "@semos-labs/glyph-markdown": ["./packages/glyph-markdown/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/glyph/src/**/*",
+    "packages/glyph-markdown/src/**/*"
+  ],
+  "exclude": [
+    "packages/glyph/src/__tests__"
+  ]
+}

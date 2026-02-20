@@ -577,6 +577,7 @@ export interface MarkdownProps {
  * // Custom options
  * <Markdown highlight={{ langs: ["typescript", "python"] }}>{source}</Markdown>
  * ```
+ * @category Markdown
  */
 export const Markdown = React.memo(function Markdown({
   children,

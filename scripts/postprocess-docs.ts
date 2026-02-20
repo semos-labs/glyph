@@ -33,8 +33,16 @@ import { join, relative, basename, dirname } from "node:path";
 // ────────────────────────────────────────────────────────────────────
 
 const TYPEDOC_DIR = process.argv[2] || ".docs-out";
-const SRC_ROOT    = "packages/glyph/src";
-const INDEX_FILE  = join(SRC_ROOT, "index.ts");
+
+/** All packages to process — order matters (first wins for same-file fallback). */
+const PACKAGES = [
+  { srcRoot: "packages/glyph/src",          indexFile: "packages/glyph/src/index.ts" },
+  { srcRoot: "packages/glyph-markdown/src", indexFile: "packages/glyph-markdown/src/index.ts" },
+];
+
+// Legacy aliases — kept for helpers that accept a single SRC_ROOT
+const SRC_ROOT    = PACKAGES[0]!.srcRoot;
+const INDEX_FILE  = PACKAGES[0]!.indexFile;
 
 /** Canonical category names → output folder */
 const CATEGORY_FOLDERS: Record<string, string> = {
@@ -44,6 +52,7 @@ const CATEGORY_FOLDERS: Record<string, string> = {
   Navigation:  "navigation",
   Keybindings: "keybindings",
   Feedback:    "feedback",
+  Markdown:    "markdown",
   Core:        "core",
 };
 
@@ -56,14 +65,14 @@ interface ExportInfo {
   sourceFile: string; // relative to SRC_ROOT, e.g. "components/Box.tsx"
 }
 
-function resolveSourceFile(basePath: string): string {
+function resolveSourceFile(basePath: string, srcRoot: string = SRC_ROOT): string {
   for (const ext of [".ts", ".tsx"]) {
-    const candidate = join(SRC_ROOT, basePath + ext);
+    const candidate = join(srcRoot, basePath + ext);
     if (existsSync(candidate)) return basePath + ext;
   }
   // Try as directory with index
   for (const ext of [".ts", ".tsx"]) {
-    const candidate = join(SRC_ROOT, basePath, "index" + ext);
+    const candidate = join(srcRoot, basePath, "index" + ext);
     if (existsSync(candidate)) return basePath + "/index" + ext;
   }
   return "";
@@ -73,8 +82,8 @@ function resolveSourceFile(basePath: string): string {
  * If a source file is a barrel (only re-exports, no declarations),
  * resolve each symbol to its actual declaration file.
  */
-function resolveBarrelExports(sourceFile: string, symbols: string[]): ExportInfo[] {
-  const content = readFileSync(join(SRC_ROOT, sourceFile), "utf-8");
+function resolveBarrelExports(sourceFile: string, symbols: string[], srcRoot: string = SRC_ROOT): ExportInfo[] {
+  const content = readFileSync(join(srcRoot, sourceFile), "utf-8");
 
   // Check if this file has any actual declarations (not just re-exports like `export type { ... }`)
   // The \w after the keyword ensures we match `export type Foo` but not `export type {`
@@ -95,7 +104,7 @@ function resolveBarrelExports(sourceFile: string, symbols: string[]): ExportInfo
     // Resolve relative to the barrel file's directory
     const barrelDir = dirname(sourceFile);
     const resolvedBase = join(barrelDir, rawPath).replace(/\\/g, "/");
-    const resolvedFile = resolveSourceFile(resolvedBase);
+    const resolvedFile = resolveSourceFile(resolvedBase, srcRoot);
     if (resolvedFile) {
       for (const sym of syms) reExportMap.set(sym, resolvedFile);
     }
@@ -114,7 +123,7 @@ function resolveBarrelExports(sourceFile: string, symbols: string[]): ExportInfo
   return results;
 }
 
-function parseIndexExports(indexPath: string): ExportInfo[] {
+function parseIndexExports(indexPath: string, srcRoot: string = SRC_ROOT): ExportInfo[] {
   const content = readFileSync(indexPath, "utf-8");
   const exports: ExportInfo[] = [];
 
@@ -128,11 +137,11 @@ function parseIndexExports(indexPath: string): ExportInfo[] {
     const symbols = rawSymbols.split(",").map((s) => s.trim()).filter(Boolean);
     const rawPath = m[2]!;
     const basePath = rawPath.replace(/\.js$/, "");
-    const sourcePath = resolveSourceFile(basePath);
+    const sourcePath = resolveSourceFile(basePath, srcRoot);
     if (!sourcePath) continue;
 
     // Resolve through barrels if needed
-    const resolved = resolveBarrelExports(sourcePath, symbols);
+    const resolved = resolveBarrelExports(sourcePath, symbols, srcRoot);
     exports.push(...resolved);
   }
 
@@ -148,8 +157,8 @@ interface CategoryTag {
   category: string;
 }
 
-function findCategoryTags(sourceFile: string, symbolsInFile: string[]): CategoryTag[] {
-  const lines = readFileSync(join(SRC_ROOT, sourceFile), "utf-8").split("\n");
+function findCategoryTags(sourceFile: string, symbolsInFile: string[], srcRoot: string = SRC_ROOT): CategoryTag[] {
+  const lines = readFileSync(join(srcRoot, sourceFile), "utf-8").split("\n");
   const tags: CategoryTag[] = [];
 
   for (const sym of symbolsInFile) {
@@ -159,6 +168,7 @@ function findCategoryTags(sourceFile: string, symbolsInFile: string[]): Category
       return (
         t.startsWith(`export const ${sym} `) || t.startsWith(`export const ${sym}=`) || t.startsWith(`export const ${sym}:`) ||
         t.startsWith(`export function ${sym}(`) || t.startsWith(`export function ${sym}<`) || t.startsWith(`export function ${sym} `) ||
+        t.startsWith(`export async function ${sym}(`) || t.startsWith(`export async function ${sym}<`) || t.startsWith(`export async function ${sym} `) ||
         t.startsWith(`export interface ${sym} `) || t.startsWith(`export interface ${sym}<`) || t.startsWith(`export interface ${sym}{`) ||
         t.startsWith(`export type ${sym} `) || t.startsWith(`export type ${sym}=`) || t.startsWith(`export type ${sym}<`) ||
         t.startsWith(`export class ${sym} `) || t.startsWith(`export class ${sym}{`) ||
@@ -283,15 +293,33 @@ function matchByCrossRef(
 
 function discoverTypedocFiles(dir: string): Map<string, string> {
   const map = new Map<string, string>();
+  const groups = ["variables", "functions", "interfaces", "type-aliases"];
 
-  for (const group of ["variables", "functions", "interfaces", "type-aliases"]) {
+  // Flat structure: variables/, functions/, etc.
+  for (const group of groups) {
     const groupDir = join(dir, group);
-    if (!existsSync(groupDir)) continue;
+    if (existsSync(groupDir) && statSync(groupDir).isDirectory()) {
+      for (const file of readdirSync(groupDir)) {
+        if (!file.endsWith(".md")) continue;
+        const name = file.replace(/\.md$/, "");
+        map.set(name, `${group}/${name}`);
+      }
+    }
+  }
 
-    for (const file of readdirSync(groupDir)) {
-      if (!file.endsWith(".md")) continue;
-      const name = file.replace(/\.md$/, "");
-      map.set(name, `${group}/${name}`);
+  // Package-scoped structure: <pkg>/src/variables/, etc.
+  // (TypeDoc uses this when multiple entry points are present)
+  for (const entry of readdirSync(dir)) {
+    const srcDir = join(dir, entry, "src");
+    if (!existsSync(srcDir) || !statSync(srcDir).isDirectory()) continue;
+    for (const group of groups) {
+      const groupDir = join(srcDir, group);
+      if (!existsSync(groupDir) || !statSync(groupDir).isDirectory()) continue;
+      for (const file of readdirSync(groupDir)) {
+        if (!file.endsWith(".md")) continue;
+        const name = file.replace(/\.md$/, "");
+        map.set(name, `${entry}/src/${group}/${name}`);
+      }
     }
   }
 
@@ -438,24 +466,40 @@ function resolveTypedocKey(relPath: string, fromDir: string): string | null {
 
 console.log("📖 Post-processing TypeDoc output...\n");
 
-// Step 1: Parse index.ts
-const allExports = parseIndexExports(INDEX_FILE);
-console.log(`   Found ${allExports.length} exports from index.ts`);
+// Step 1: Parse index.ts from all packages
+const allExports: ExportInfo[] = [];
+/** Maps symbol → srcRoot so findCategoryTags uses the correct base path */
+const symbolSrcRoot = new Map<string, string>();
 
-// Group by source file
-const bySourceFile = new Map<string, string[]>();
+for (const pkg of PACKAGES) {
+  if (!existsSync(pkg.indexFile)) continue;
+  const pkgExports = parseIndexExports(pkg.indexFile, pkg.srcRoot);
+  for (const exp of pkgExports) symbolSrcRoot.set(exp.symbol, pkg.srcRoot);
+  allExports.push(...pkgExports);
+  console.log(`   Found ${pkgExports.length} exports from ${pkg.indexFile}`);
+}
+
+// Group by source file (+ srcRoot for resolution)
+const bySourceFile = new Map<string, { symbols: string[]; srcRoot: string }>();
 for (const exp of allExports) {
-  const arr = bySourceFile.get(exp.sourceFile) || [];
-  arr.push(exp.symbol);
-  bySourceFile.set(exp.sourceFile, arr);
+  const key = `${symbolSrcRoot.get(exp.symbol)}::${exp.sourceFile}`;
+  const entry = bySourceFile.get(key) || { symbols: [], srcRoot: symbolSrcRoot.get(exp.symbol)! };
+  entry.symbols.push(exp.symbol);
+  bySourceFile.set(key, entry);
 }
 
 // Step 2: Scan for @category tags
 const primaries = new Map<string, PrimaryPage>();
 const allCategories = new Set<string>();
 
-for (const [sourceFile, symbols] of bySourceFile) {
-  const tags = findCategoryTags(sourceFile, symbols);
+for (const [, { symbols, srcRoot }] of bySourceFile) {
+  // All symbols in a group share the same sourceFile — extract it from the key
+  const sourceFile = allExports.find(
+    (e) => symbols.includes(e.symbol) && symbolSrcRoot.get(e.symbol) === srcRoot,
+  )?.sourceFile;
+  if (!sourceFile) continue;
+
+  const tags = findCategoryTags(sourceFile, symbols, srcRoot);
   for (const tag of tags) {
     const folder = CATEGORY_FOLDERS[tag.category];
     if (!folder) {
@@ -479,9 +523,11 @@ const typedocFiles = discoverTypedocFiles(TYPEDOC_DIR);
 console.log(`   Found ${typedocFiles.size} TypeDoc markdown files`);
 
 // Step 4: Merge un-tagged symbols into primaries
+// Use srcRoot::sourceFile as composite key so cross-package files don't collide
 const symbolToSource = new Map<string, string>();
 for (const exp of allExports) {
-  symbolToSource.set(exp.symbol, exp.sourceFile);
+  const root = symbolSrcRoot.get(exp.symbol) ?? SRC_ROOT;
+  symbolToSource.set(exp.symbol, `${root}::${exp.sourceFile}`);
 }
 
 const untagged = allExports
@@ -662,6 +708,7 @@ const categoryLabels: Record<string, string> = {
   Navigation:  "Navigation",
   Keybindings: "Keybindings",
   Feedback:    "Feedback",
+  Markdown:    "Markdown",
   Core:        "Core",
 };
 

@@ -1,7 +1,10 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "entryPoints": ["packages/glyph/src/index.ts"],
-  "tsconfig": "packages/glyph/tsconfig.json",
+  "entryPoints": [
+    "packages/glyph/src/index.ts",
+    "packages/glyph-markdown/src/index.ts"
+  ],
+  "tsconfig": "tsconfig.docs.json",
   "plugin": ["typedoc-plugin-markdown"],
 
   "out": ".docs-out",
@@ -21,6 +24,10 @@
       "GlyphNode": "#",
       "UseAppResult": "#",
       "UseFocusResult": "#"
+    },
+    "@semos-labs/glyph-markdown": {
+      "Highlighter": "#",
+      "CreateHighlighterOptions": "#"
     }
   },
   "groupOrder": [
@@ -30,6 +37,7 @@
     "Navigation",
     "Keybindings",
     "Feedback",
+    "Markdown",
     "Core",
     "Type Aliases",
     "Interfaces",
@@ -43,6 +51,7 @@
     "Navigation",
     "Keybindings",
     "Feedback",
+    "Markdown",
     "Core",
     "*"
   ],

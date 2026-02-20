@@ -51,6 +51,10 @@ jobs:
           npm pkg set version=${{ steps.version.outputs.version }}
           cat package.json | grep version
 
+          cd packages/glyph-markdown
+          npm pkg set version=${{ steps.version.outputs.version }}
+          cat package.json | grep version
+
       - name: Build glyph
         run: bun run build
         working-directory: packages/glyph
@@ -68,6 +72,12 @@ jobs:
       - name: Publish glyph
         run: npm publish --provenance --access public --tag ${{ steps.version.outputs.npm_tag }}
         working-directory: packages/glyph
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish glyph Markdown
+        run: npm publish --provenance --access public --tag ${{ steps.version.outputs.npm_tag }}
+        working-directory: packages/glyph-markdown
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

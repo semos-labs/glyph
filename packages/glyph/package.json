@@ -17,6 +17,7 @@
     "README.md"
   ],
   "scripts": {
+    "prepack": "cp ../../README.md .",
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "bun test",

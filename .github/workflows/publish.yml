@@ -59,9 +59,6 @@ jobs:
         run: bun run build
         working-directory: packages/create-glyph
 
-      - name: Copy README to glyph package
-        run: cp README.md packages/glyph/README.md
-
       - name: Setup Node.js for npm publish
         uses: actions/setup-node@v4
         with:

@@ -51,7 +51,7 @@ jobs:
           npm pkg set version=${{ steps.version.outputs.version }}
           cat package.json | grep version
 
-          cd packages/glyph-markdown
+          cd ../glyph-markdown
           npm pkg set version=${{ steps.version.outputs.version }}
           cat package.json | grep version
 

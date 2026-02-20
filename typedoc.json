@@ -25,6 +25,7 @@
   },
   "groupOrder": [
     "Layout",
+    "Tables",
     "Form",
     "Navigation",
     "Keybindings",
@@ -37,6 +38,7 @@
   ],
   "categoryOrder": [
     "Layout",
+    "Tables",
     "Form",
     "Navigation",
     "Keybindings",

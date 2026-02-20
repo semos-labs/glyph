@@ -39,6 +39,7 @@ const INDEX_FILE  = join(SRC_ROOT, "index.ts");
 /** Canonical category names → output folder */
 const CATEGORY_FOLDERS: Record<string, string> = {
   Layout:      "layout",
+  Tables:      "tables",
   Form:        "form",
   Navigation:  "navigation",
   Keybindings: "keybindings",
@@ -656,6 +657,7 @@ function comparePrimaries(
 // Step 6: Generate index
 const categoryLabels: Record<string, string> = {
   Layout:      "Layout",
+  Tables:      "Tables",
   Form:        "Form",
   Navigation:  "Navigation",
   Keybindings: "Keybindings",

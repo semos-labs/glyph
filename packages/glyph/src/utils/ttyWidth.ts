@@ -210,7 +210,7 @@ function graphemeWidth(segment: string): number {
  * ttyStringWidth("文字")           // 4  (CJK, correctly 2 each)
  * ttyStringWidth("\x1b[31mred\x1b[0m") // 3  (ANSI stripped)
  * ```
- * @category Utilities
+ * @category Core
  */
 export function ttyStringWidth(str: string): number {
   if (str.length === 0) return 0;
@@ -243,7 +243,7 @@ export function ttyStringWidth(str: string): number {
  * ttyCharWidth("文") // 2
  * ttyCharWidth("↗")  // 1
  * ```
- * @category Utilities
+ * @category Core
  */
 export function ttyCharWidth(ch: string): number {
   if (ch.length === 0) return 0;

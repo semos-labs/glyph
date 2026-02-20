@@ -67,7 +67,7 @@ export interface DebugOverlayProps {
  *   );
  * }
  * ```
- * @category Components
+ * @category Core
  */
 export function DebugOverlay({
   phases = true,

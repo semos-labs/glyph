@@ -28,7 +28,7 @@ export interface FocusContextValue {
   focusedId: string | null;
   /** 
    * Register a focusable element. 
-   * @param autoFocus - If false, element won't receive auto-focus when nothing is focused (default: true)
+   * @param autoFocus - If true, element is eligible for auto-focus when nothing is focused (default: false)
    */
   register(id: string, node: GlyphNode, autoFocus?: boolean): () => void;
   requestFocus(id: string): void;

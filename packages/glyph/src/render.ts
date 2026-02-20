@@ -166,7 +166,6 @@ export function render(
   // ---- Focus system ----
     let focusedId: string | null = null;
     const focusRegistry = new Map<string, GlyphNode>();
-    const focusOrder: string[] = [];
     const skippableIds = new Set<string>(); // Disabled/skippable elements during Tab
     const noAutoFocusIds = new Set<string>(); // Elements that shouldn't receive auto-focus
     let trapStack: Array<Set<string>> = [];
@@ -182,8 +181,32 @@ export function render(
       }
     }
 
+    /**
+     * Walk the node tree depth-first (like DOM order) and collect
+     * registered focusable IDs.  This replaces the old layout-based
+     * sort and gives the same tab-order semantics as the web.
+     *
+     * `container` is defined later in this closure but will always be
+     * initialised by the time any focus function is actually called.
+     */
+    function getTreeOrderFocusIds(): string[] {
+      const result: string[] = [];
+      function walk(node: GlyphNode): void {
+        if (node.focusId && focusRegistry.has(node.focusId)) {
+          result.push(node.focusId);
+        }
+        for (const child of node.children) {
+          walk(child);
+        }
+      }
+      for (const root of container.children) {
+        walk(root);
+      }
+      return result;
+    }
+
     function getActiveFocusableIds(): string[] {
-      let ids = [...focusOrder]; // Copy to avoid mutating original
+      let ids = getTreeOrderFocusIds();
 
       // Filter by trap if active
       if (trapStack.length > 0) {
@@ -194,22 +217,6 @@ export function render(
       // Filter out skippable (disabled) elements
       ids = ids.filter((id) => !skippableIds.has(id));
 
-      // Sort by visual position (top-to-bottom, left-to-right) - like web DOM order
-      ids.sort((a, b) => {
-        const nodeA = focusRegistry.get(a);
-        const nodeB = focusRegistry.get(b);
-        if (!nodeA || !nodeB) return 0;
-
-        const layoutA = nodeA.layout;
-        const layoutB = nodeB.layout;
-
-        // Compare Y first (row), then X (column)
-        if (layoutA.y !== layoutB.y) {
-          return layoutA.y - layoutB.y;
-        }
-        return layoutA.x - layoutB.x;
-      });
-
       return ids;
     }
 
@@ -217,36 +224,41 @@ export function render(
       get focusedId() {
         return focusedId;
       },
-      register(id: string, node: GlyphNode, autoFocus: boolean = true) {
+      register(id: string, node: GlyphNode, autoFocus: boolean = false) {
         focusRegistry.set(id, node);
-        if (!focusOrder.includes(id)) {
-          focusOrder.push(id);
-        }
         // Track if element should not receive auto-focus
         if (!autoFocus) {
           noAutoFocusIds.add(id);
+        } else {
+          // In case the same id re-registers with autoFocus enabled
+          noAutoFocusIds.delete(id);
         }
         // Auto-register in active trap
         if (trapStack.length > 0) {
           trapStack[trapStack.length - 1]!.add(id);
         }
-        // Auto-focus first item if nothing focused (by visual order)
-        // Skip elements that opted out of auto-focus
-        if (focusedId === null && autoFocus) {
-          const activeIds = getActiveFocusableIds().filter(i => !noAutoFocusIds.has(i));
-          if (activeIds.length > 0) {
-            setFocusedId(activeIds[0]!);
+        // Auto-focus: only when nothing is focused (or nothing in the
+        // active trap) AND the registering element opted in.
+        // autoFocus=false always prevents auto-focus, even inside traps.
+        if (autoFocus) {
+          const shouldAutoFocus = trapStack.length > 0
+            ? !focusedId || !trapStack[trapStack.length - 1]!.has(focusedId)
+            : focusedId === null;
+
+          if (shouldAutoFocus) {
+            const activeIds = getActiveFocusableIds().filter(i => !noAutoFocusIds.has(i));
+            if (activeIds.length > 0) {
+              setFocusedId(activeIds[0]!);
+            }
           }
         }
         return () => {
           focusRegistry.delete(id);
           noAutoFocusIds.delete(id);
-          const idx = focusOrder.indexOf(id);
-          if (idx !== -1) focusOrder.splice(idx, 1);
           if (focusedId === id) {
-            // Focus first by visual order (excluding noAutoFocus elements)
-            const activeIds = getActiveFocusableIds().filter(i => !noAutoFocusIds.has(i));
-            setFocusedId(activeIds[0] ?? null);
+            // Focused element was removed — clear focus (like web's blur-to-body).
+            // User can Tab to re-enter the focus cycle.
+            setFocusedId(null);
           }
         };
       },
@@ -260,15 +272,23 @@ export function render(
         const ids = getActiveFocusableIds();
         if (ids.length === 0) return;
         const currentIdx = focusedId ? ids.indexOf(focusedId) : -1;
-        const nextIdx = (currentIdx + 1) % ids.length;
-        setFocusedId(ids[nextIdx]!);
+        if (currentIdx === -1) {
+          // Nothing focused (or focused element left the tree) → first element
+          setFocusedId(ids[0]!);
+        } else {
+          setFocusedId(ids[(currentIdx + 1) % ids.length]!);
+        }
       },
       focusPrev() {
         const ids = getActiveFocusableIds();
         if (ids.length === 0) return;
-        const currentIdx = focusedId ? ids.indexOf(focusedId) : 0;
-        const prevIdx = (currentIdx - 1 + ids.length) % ids.length;
-        setFocusedId(ids[prevIdx]!);
+        const currentIdx = focusedId ? ids.indexOf(focusedId) : -1;
+        if (currentIdx === -1) {
+          // Nothing focused (or focused element left the tree) → last element
+          setFocusedId(ids[ids.length - 1]!);
+        } else {
+          setFocusedId(ids[(currentIdx - 1 + ids.length) % ids.length]!);
+        }
       },
       setSkippable(id: string, skippable: boolean) {
         if (skippable) {
@@ -299,9 +319,9 @@ export function render(
         };
       },
       getRegisteredElements() {
-        // Return all non-skippable registered elements
+        // Return all non-skippable registered elements in tree order
         const result: { id: string; node: GlyphNode }[] = [];
-        for (const id of focusOrder) {
+        for (const id of getTreeOrderFocusIds()) {
           if (skippableIds.has(id)) continue;
           const node = focusRegistry.get(id);
           if (node) {
@@ -569,7 +589,15 @@ export function render(
           }
         }
 
-        // 3. Tab navigation (if not consumed by input handler)
+        // 3. Escape blurs the focused element (if not already consumed)
+        // Components can handle Escape themselves (e.g. Select closing a
+        // dropdown) by returning true from their input handler above.
+        if (!consumed && key.name === "escape" && focusedId) {
+          focusContextValue.blur();
+          continue;
+        }
+
+        // 4. Tab navigation (if not consumed by input handler)
         // This allows inputs to handle Tab via onKeyPress and return true to prevent focus change
         if (!consumed && key.name === "tab" && !key.ctrl && !key.alt) {
           if (key.shift) {
@@ -580,7 +608,7 @@ export function render(
           continue;
         }
 
-        // 4. If still not consumed, run global handlers
+        // 5. If still not consumed, run global handlers
         if (!consumed) {
           for (const handler of inputHandlers) {
             handler(key);

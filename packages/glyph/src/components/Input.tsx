@@ -359,10 +359,11 @@ export const Input = forwardRef<InputHandle, InputProps>(
   };
 
   // Register with focus system
+  // Pass autoFocus prop so inputs without it don't grab focus on registration
   useEffect(() => {
     if (!focusCtx || !focusIdRef.current || !nodeRef.current) return;
-    return focusCtx.register(focusIdRef.current, nodeRef.current);
-  }, [focusCtx, nodeReady]);
+    return focusCtx.register(focusIdRef.current, nodeRef.current, !!autoFocus);
+  }, [focusCtx, nodeReady, autoFocus]);
 
   // Auto-focus on mount if requested
   // Use setTimeout to ensure this runs AFTER all registrations and layout effects complete

@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useLayoutEffect, useRef } from "react";
+import React, { useContext, useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { FocusContext } from "../hooks/context.js";
 
@@ -56,14 +56,9 @@ export function FocusScope({ trap = false, children }: FocusScopeProps): React.J
     };
   }, [trap, focusCtx]);
 
-  // Focus first trapped item AFTER children have registered (useEffect runs after children's useEffect)
-  useEffect(() => {
-    if (!trap || !focusCtx) return;
-    if (scopeIdsRef.current.size > 0) {
-      const firstId = scopeIdsRef.current.values().next().value;
-      if (firstId) focusCtx.requestFocus(firstId);
-    }
-  }, [trap, focusCtx]);
+  // Auto-focus of the first trapped element is handled by the focus
+  // system's register() — when a trap is active and nothing in it is
+  // focused, register() focuses the first element in tree order.
 
   return React.createElement(React.Fragment, null, children);
 }

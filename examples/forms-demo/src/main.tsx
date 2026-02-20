@@ -35,7 +35,6 @@ function App() {
   return (
     <Box style={{ padding: 1, gap: 1 }}>
       <Keybind keypress="q" onPress={() => exit()} />
-      <Keybind keypress="escape" onPress={() => exit()} />
 
       {/* Header */}
       <Box style={{ paddingBottom: 1 }}>

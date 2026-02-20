@@ -71,14 +71,8 @@ export function useFocusRegistry(): FocusRegistryValue | null {
       type: node.type,
     }));
     
-    // Sort by visual position (top-to-bottom, left-to-right)
-    mapped.sort((a, b) => {
-      if (a.layout.y !== b.layout.y) {
-        return a.layout.y - b.layout.y;
-      }
-      return a.layout.x - b.layout.x;
-    });
-    
+    // Elements arrive in tree order (depth-first, like DOM tab order)
+    // from the focus system — no extra sorting needed.
     setElements(mapped);
   }, [focusCtx, layoutCtx]);
 

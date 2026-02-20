@@ -79,11 +79,20 @@ export const Button = forwardRef<ButtonHandle, ButtonProps>(
       },
     }), [focusCtx, isFocused, scrollCtx]);
 
-    // Register with focus system
+    // Register with focus system (always register; disabled handled by setSkippable)
     useEffect(() => {
-      if (!focusCtx || !focusIdRef.current || !nodeRef.current || disabled) return;
+      if (!focusCtx || !focusIdRef.current || !nodeRef.current) return;
       return focusCtx.register(focusIdRef.current, nodeRef.current);
-    }, [focusCtx, disabled, nodeReady]);
+    }, [focusCtx, nodeReady]);
+
+    // Handle disabled state: skip in tab order + release focus if held
+    useEffect(() => {
+      if (!focusCtx || !focusIdRef.current) return;
+      focusCtx.setSkippable(focusIdRef.current, !!disabled);
+      if (disabled && focusCtx.focusedId === focusIdRef.current) {
+        focusCtx.blur();
+      }
+    }, [focusCtx, disabled]);
 
     // Subscribe to focus changes for reactive visual state
     useEffect(() => {
@@ -126,7 +135,7 @@ export const Button = forwardRef<ButtonHandle, ButtonProps>(
       "box" as any,
       {
         style: mergedStyle,
-        focusable: !disabled,
+        focusable: true,
         ref: (node: any) => {
           if (node) {
             nodeRef.current = node;

@@ -13,6 +13,7 @@ import type { ScrollIntoViewOptions } from "../hooks/context.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 import { spawn } from "node:child_process";
 import { platform } from "node:os";
+import { Text } from "./Text.js";
 
 /**
  * Open a URL in the user's default browser.
@@ -176,12 +177,9 @@ export const Link = forwardRef<LinkHandle, LinkProps>(
 
     const content = children ?? React.createElement("text" as any, { key: "label" }, href);
 
-    return React.createElement(
-      "box" as any,
-      {
-        style: mergedStyle,
-        focusable,
-        ref: (node: any) => {
+    return <Text
+      ref={
+        (node: any) => {
           if (node) {
             nodeRef.current = node;
             focusIdRef.current = node.focusId;
@@ -191,9 +189,10 @@ export const Link = forwardRef<LinkHandle, LinkProps>(
             focusIdRef.current = null;
             setNodeReady(false);
           }
-        },
-      },
-      content,
-    );
+        }
+      }
+      style={mergedStyle}
+      focusable
+    >{content}</Text>
   }
 );

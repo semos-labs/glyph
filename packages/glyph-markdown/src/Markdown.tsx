@@ -561,8 +561,22 @@ export interface MarkdownProps {
  * document contains code blocks. Code blocks render immediately with plain
  * text, then re-render with highlighting once Shiki is ready.
  *
+ * ## Installation
+ *
+ * This component is part of the `@semos-labs/glyph-markdown` package which
+ * is **not** included in the core `@semos-labs/glyph` package.
+ *
+ * ```bash
+ * bun add @semos-labs/glyph-markdown
+ * # or: npm install @semos-labs/glyph-markdown
+ * ```
+ *
+ * Requires `@semos-labs/glyph` and `react` as peer dependencies.
+ *
  * @example
  * ```tsx
+ * import { Markdown } from "@semos-labs/glyph-markdown";
+ *
  * <Markdown>{source}</Markdown>
  * ```
  *

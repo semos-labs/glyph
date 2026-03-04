@@ -274,6 +274,34 @@ export interface Key {
 }
 
 /**
+ * Mouse event from the terminal.
+ *
+ * Dispatched for mouse clicks, movement, and wheel scrolling when
+ * the terminal has SGR mouse tracking enabled.
+ */
+export interface MouseEvent {
+  /** Event type. */
+  type: "mousedown" | "mouseup" | "mousemove" | "wheel";
+  /** 0-indexed column. */
+  x: number;
+  /** 0-indexed row. */
+  y: number;
+  /** 0 = left, 1 = middle, 2 = right, -1 = none (motion without button). */
+  button: number;
+  /** Wheel direction: 1 = down, -1 = up. Only present for `type: "wheel"`. */
+  wheelDelta?: number;
+  /** `true` when Ctrl is held. */
+  ctrl: boolean;
+  /** `true` when Alt / Option is held. */
+  alt: boolean;
+  /** `true` when Shift is held. */
+  shift: boolean;
+}
+
+/** Mouse event handler attached to a box element via props. */
+export type MouseEventHandler = (event: MouseEvent) => void;
+
+/**
  * Options for the top-level {@link render} function.
  */
 export interface RenderOptions {

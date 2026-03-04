@@ -98,6 +98,17 @@ export class Terminal {
     this.write(`${CSI}0m`);
   }
 
+  /** Enable SGR mouse tracking (click + motion + wheel). */
+  enableMouse(): void {
+    // 1000 = button events, 1003 = all motion events, 1006 = SGR encoding
+    this.write(`${CSI}?1000h${CSI}?1003h${CSI}?1006h`);
+  }
+
+  /** Disable SGR mouse tracking. */
+  disableMouse(): void {
+    this.write(`${CSI}?1006l${CSI}?1003l${CSI}?1000l`);
+  }
+
   /** Enable kitty keyboard protocol for enhanced key detection */
   enableKittyKeyboard(): void {
     // Push keyboard mode with flags:
@@ -119,6 +130,7 @@ export class Terminal {
     this.enterRawMode();
     this.enterAltScreen();
     this.enableKittyKeyboard(); // Enable extended keyboard protocol
+    this.enableMouse();
     this.hideCursor();
     this.clearScreen();
     this.attachStdinListener();
@@ -136,6 +148,7 @@ export class Terminal {
 
     this.resetStyles();
     this.resetCursorColor();
+    this.disableMouse();
     this.disableKittyKeyboard(); // Restore normal keyboard mode
     this.showCursor();
     this.exitAltScreen();
@@ -153,6 +166,7 @@ export class Terminal {
 
     this.resetStyles();
     this.resetCursorColor();
+    this.disableMouse();
     this.disableKittyKeyboard();
     this.showCursor();
     this.exitAltScreen();
@@ -164,6 +178,7 @@ export class Terminal {
     this.enterRawMode();
     this.enterAltScreen();
     this.enableKittyKeyboard();
+    this.enableMouse();
     this.hideCursor();
     this.clearScreen();
   }

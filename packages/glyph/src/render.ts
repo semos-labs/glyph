@@ -4,9 +4,13 @@ import { reconciler } from "./reconciler/reconciler.js";
 import type { GlyphContainer } from "./reconciler/nodes.js";
 import type { GlyphNode } from "./reconciler/nodes.js";
 import { Terminal } from "./runtime/terminal.js";
-import { parseKeySequence } from "./runtime/input.js";
+import { parseInput } from "./runtime/input.js";
+import type { ParsedInput } from "./runtime/input.js";
 import { Framebuffer } from "./paint/framebuffer.js";
 import { paintTree } from "./paint/painter.js";
+import type { PaintEntry } from "./paint/painter.js";
+import { hitTest } from "./runtime/hitTest.js";
+import type { HitTestEntry } from "./runtime/hitTest.js";
 import { diffFramebuffers } from "./paint/diff.js";
 import type { CursorState } from "./paint/diff.js";
 import { computeLayout, createRootYogaNode } from "./layout/yogaLayout.js";
@@ -17,6 +21,7 @@ import {
   LayoutContext,
   AppContext,
   ImageOverlayContext,
+  MouseContext,
 } from "./hooks/context.js";
 import { clearImageEscapeSequence } from "./runtime/imageProtocol.js";
 import type {
@@ -29,9 +34,11 @@ import type {
   AppContextValue,
   ImageOverlayContextValue,
   PendingImage,
+  GlobalMouseHandler,
+  MouseContextValue,
 } from "./hooks/context.js";
 import { renderImageEscapeSequence } from "./runtime/imageProtocol.js";
-import type { RenderOptions, AppHandle, LayoutRect } from "./types/index.js";
+import type { RenderOptions, AppHandle, LayoutRect, MouseEvent } from "./types/index.js";
 import { resetFramePerf, flushFramePerf, initPerfLog, framePerf as perf } from "./perf.js";
 
 /**
@@ -93,6 +100,8 @@ export function render(
   const currentFb = new Framebuffer(terminal.columns, terminal.rows);
   let fullRedraw = true;
   let lastFrameTime = 0;
+  let lastPaintEntries: HitTestEntry[] = [];
+  let lastHoveredNode: GlyphNode | null = null;
   let frameTiming: import("./hooks/context.js").FrameTiming = {
     total: 0, layout: 0, paint: 0, diff: 0, swap: 0,
   };
@@ -161,6 +170,105 @@ export function render(
       }
     }
     pendingImageRenders.clear();
+  }
+
+  // ---- Mouse system ----
+  const globalMouseHandlers = new Set<GlobalMouseHandler>();
+
+  const mouseContextValue: MouseContextValue = {
+    subscribe(handler: GlobalMouseHandler) {
+      globalMouseHandlers.add(handler);
+      return () => { globalMouseHandlers.delete(handler); };
+    },
+  };
+
+  /**
+   * Walk the parent chain from `node` upward, calling `propName` on the first
+   * node whose props contain it.  Returns true if a handler was found.
+   */
+  function bubbleMouseEvent(node: GlyphNode | null, propName: string, event: MouseEvent): boolean {
+    let cur: GlyphNode | null = node;
+    while (cur) {
+      const handler = cur.props[propName];
+      if (typeof handler === "function") {
+        handler(event);
+        return true;
+      }
+      cur = cur.parent;
+    }
+    return false;
+  }
+
+  /** Find the nearest focusable ancestor (including the node itself). */
+  function findFocusableAncestor(node: GlyphNode | null): GlyphNode | null {
+    let cur: GlyphNode | null = node;
+    while (cur) {
+      if (cur.focusId) return cur;
+      cur = cur.parent;
+    }
+    return null;
+  }
+
+  /** Check if the node or any ancestor has a specific prop handler. */
+  function hasAncestorHandler(node: GlyphNode | null, propName: string): boolean {
+    let cur: GlyphNode | null = node;
+    while (cur) {
+      if (typeof cur.props[propName] === "function") return true;
+      cur = cur.parent;
+    }
+    return false;
+  }
+
+  function dispatchMouseEvent(event: MouseEvent): void {
+    const target = hitTest(lastPaintEntries, event.x, event.y);
+    const targetNode = target?.node ?? null;
+
+    if (event.type === "mousedown") {
+      // Focus-on-click: find focusable ancestor and focus it.
+      // Skip blur when the target has an onClick handler — those nodes
+      // (e.g. Select dropdown items) manage focus themselves, and
+      // blurring here would close the overlay before onClick fires.
+      const focusable = findFocusableAncestor(targetNode);
+      if (focusable?.focusId) {
+        focusContextValue.requestFocus(focusable.focusId);
+      } else if (!hasAncestorHandler(targetNode, "onClick")) {
+        focusContextValue.blur();
+      }
+
+      bubbleMouseEvent(targetNode, "onMouseDown", event);
+      // Fire onClick on mousedown (not mouseup) so it executes
+      // synchronously before any blur/close effects propagate.
+      // Terminal mouse events often arrive as separate data chunks
+      // for press vs release, so deferring to mouseup risks stale nodes.
+      bubbleMouseEvent(targetNode, "onClick", event);
+    }
+
+    if (event.type === "mouseup") {
+      bubbleMouseEvent(targetNode, "onMouseUp", event);
+    }
+
+    if (event.type === "wheel") {
+      bubbleMouseEvent(targetNode, "onWheel", event);
+    }
+
+    if (event.type === "mousemove") {
+      // Hover tracking: fire onMouseLeave/onMouseEnter on node changes
+      if (targetNode !== lastHoveredNode) {
+        if (lastHoveredNode) {
+          bubbleMouseEvent(lastHoveredNode, "onMouseLeave", event);
+        }
+        if (targetNode) {
+          bubbleMouseEvent(targetNode, "onMouseEnter", event);
+        }
+        lastHoveredNode = targetNode;
+      }
+      bubbleMouseEvent(targetNode, "onMouseMove", event);
+    }
+
+    // Notify global subscribers
+    for (const handler of globalMouseHandlers) {
+      handler(event, targetNode);
+    }
   }
 
   // ---- Focus system ----
@@ -468,6 +576,11 @@ export function render(
       });
       const tPaint1 = performance.now();
 
+      // Stash paint entries for hit testing
+      if (paintResult.entries) {
+        lastPaintEntries = paintResult.entries;
+      }
+
       // ── Phase 3: Diff & flush ──
       // Everything (diff + cursor) is built into one string inside
       // diffFramebuffers, wrapped in synchronized update (DEC 2026).
@@ -548,8 +661,19 @@ export function render(
 
     // ---- Input handling ----
     const removeDataListener = terminal.onData((data: string) => {
-      const keys = parseKeySequence(data);
-      for (const key of keys) {
+      const inputs = parseInput(data);
+
+      // Dispatch mouse events first
+      for (const input of inputs) {
+        if (input.kind === "mouse") {
+          dispatchMouseEvent(input.event);
+        }
+      }
+
+      // Then handle keyboard events
+      for (const input of inputs) {
+        if (input.kind !== "key") continue;
+        const key = input.key;
         // Global: ctrl+c exits
         if (key.ctrl && key.name === "c") {
           handle.exit();
@@ -656,7 +780,11 @@ export function render(
             React.createElement(
               ImageOverlayContext.Provider,
               { value: imageOverlayContextValue },
-              element,
+              React.createElement(
+                MouseContext.Provider,
+                { value: mouseContextValue },
+                element,
+              ),
             ),
           ),
         ),

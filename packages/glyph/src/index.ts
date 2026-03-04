@@ -68,6 +68,7 @@ export { useFocusRegistry } from "./hooks/useFocusRegistry.js";
 export type { FocusableElement, FocusRegistryValue } from "./hooks/useFocusRegistry.js";
 export { useScrollIntoView } from "./hooks/useScrollIntoView.js";
 export { useMediaQuery } from "./hooks/useMediaQuery.js";
+export { useMouse } from "./hooks/useMouse.js";
 
 // Utilities
 export { createMask, masks } from "./utils/mask.js";
@@ -100,6 +101,8 @@ export type {
   BorderStyle,
   WrapMode,
   TextAlign,
+  MouseEvent,
+  MouseEventHandler,
   // Imperative handle types for refs
   FocusableHandle,
   ButtonHandle,
@@ -112,4 +115,4 @@ export type {
   LinkHandle,
   TextHandle,
 } from "./types/index.js";
-export type { ScrollIntoViewOptions, FrameTiming } from "./hooks/context.js";
+export type { ScrollIntoViewOptions, FrameTiming, MouseContextValue, GlobalMouseHandler } from "./hooks/context.js";

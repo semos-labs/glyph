@@ -1,5 +1,5 @@
 import React, { forwardRef } from "react";
-import type { Style } from "../types/index.js";
+import type { Style, MouseEventHandler } from "../types/index.js";
 import type { ReactNode, Ref } from "react";
 import type { GlyphNode } from "../reconciler/nodes.js";
 
@@ -13,6 +13,20 @@ export interface BoxProps {
   children?: ReactNode;
   /** When `true`, the box participates in the focus (Tab) order. */
   focusable?: boolean;
+  /** Called on mouse click (mouseup). */
+  onClick?: MouseEventHandler;
+  /** Called on mouse button press. */
+  onMouseDown?: MouseEventHandler;
+  /** Called on mouse button release. */
+  onMouseUp?: MouseEventHandler;
+  /** Called on mouse wheel scroll. */
+  onWheel?: MouseEventHandler;
+  /** Called when the mouse cursor enters the box. */
+  onMouseEnter?: MouseEventHandler;
+  /** Called when the mouse cursor leaves the box. */
+  onMouseLeave?: MouseEventHandler;
+  /** Called on mouse movement over the box. */
+  onMouseMove?: MouseEventHandler;
 }
 
 /**
@@ -50,7 +64,8 @@ export interface BoxProps {
   * @category Layout
  */
 export const Box = forwardRef<GlyphNode, BoxProps>(
-  function Box({ children, style, focusable }, ref): React.JSX.Element {
-    return React.createElement("box" as any, { style, focusable, ref }, children);
+  function Box({ children, style, focusable, onClick, onMouseDown, onMouseUp, onWheel, onMouseEnter, onMouseLeave, onMouseMove }, ref): React.JSX.Element {
+    return React.createElement("box" as any, { style, focusable, ref, onClick, onMouseDown, onMouseUp, onWheel, onMouseEnter, onMouseLeave, onMouseMove }, children);
   }
 );
+

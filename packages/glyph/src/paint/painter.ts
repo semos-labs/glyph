@@ -40,9 +40,13 @@ export interface PaintOptions {
   fullRedraw?: boolean;
 }
 
+export { PaintEntry };
+
 export interface PaintResult {
   /** Cursor screen position if useNativeCursor is true and an input is focused */
   cursorPosition?: CursorScreenPosition;
+  /** Z-sorted paint entries from the last paint pass (for hit testing). */
+  entries?: PaintEntry[];
 }
 
 export function paintTree(
@@ -66,7 +70,7 @@ export function paintTree(
     staleRectsSnapshot = pendingStaleRects.slice();
   }
 
-  const result: PaintResult = {};
+  const result: PaintResult = { entries: [] };
 
   // Collect all nodes with their z-index for proper ordering
   const tCollect0 = performance.now();
@@ -219,6 +223,7 @@ export function paintTree(
   perf.dirtyEntries = dirtyCount;
   perf.preClearCells = preClearCells;
 
+  result.entries = entries;
   return result;
 }
 
@@ -521,6 +526,7 @@ function paintFromCache(
 ): void {
   const { innerX, innerY, innerWidth, innerHeight } = node.layout;
   const textAlign = cache.textAlign;
+  const cacheBg = cache.iBg;
 
   for (let lineIdx = 0; lineIdx < cache.lines.length && lineIdx < innerHeight; lineIdx++) {
     const line = cache.lines[lineIdx]!;
@@ -542,6 +548,21 @@ function paintFromCache(
         );
       }
       col += cc.charWidth;
+    }
+
+    // Clear remaining cells after text
+    for (let c = offsetX + col; c < innerWidth; c++) {
+      setClipped(fb, clip, innerX + c, innerY + lineIdx, " ", undefined, cacheBg);
+    }
+    for (let c = 0; c < offsetX; c++) {
+      setClipped(fb, clip, innerX + c, innerY + lineIdx, " ", undefined, cacheBg);
+    }
+  }
+
+  // Clear remaining lines below text content
+  for (let lineIdx = cache.lines.length; lineIdx < innerHeight; lineIdx++) {
+    for (let c = 0; c < innerWidth; c++) {
+      setClipped(fb, clip, innerX + c, innerY + lineIdx, " ", undefined, cacheBg);
     }
   }
 }
@@ -679,6 +700,25 @@ function paintText(node: GlyphNode, fb: Framebuffer, clip: ClipRect, inherited: 
         );
       }
       col += cc.charWidth;
+    }
+
+    // Clear remaining cells after text to prevent ghost characters
+    // when text content shrinks (e.g. "Select..." → "Red")
+    const clearBg = inherited.bg;
+    for (let c = offsetX + col; c < innerWidth; c++) {
+      setClipped(fb, clip, innerX + c, innerY + lineIdx, " ", undefined, clearBg);
+    }
+    // Clear leading cells for center/right aligned text
+    for (let c = 0; c < offsetX; c++) {
+      setClipped(fb, clip, innerX + c, innerY + lineIdx, " ", undefined, clearBg);
+    }
+  }
+
+  // Clear remaining lines below text content
+  const clearBg = inherited.bg;
+  for (let lineIdx = wrappedLines.length; lineIdx < innerHeight; lineIdx++) {
+    for (let c = 0; c < innerWidth; c++) {
+      setClipped(fb, clip, innerX + c, innerY + lineIdx, " ", undefined, clearBg);
     }
   }
 

@@ -689,6 +689,22 @@ export const Input = forwardRef<InputHandle, InputProps>(
     cursorPosition: workingCursorRef.current,
     multiline: multiline ?? false,
     focused: isFocused,
+    onClick: (event: any) => {
+      // Focus the input on click
+      if (focusCtx && focusIdRef.current) {
+        focusCtx.requestFocus(focusIdRef.current);
+      }
+      // Position cursor based on click x-offset relative to input layout
+      if (nodeRef.current) {
+        const layout = nodeRef.current.layout;
+        const clickCol = event.x - layout.innerX;
+        const val = workingValueRef.current;
+        const newPos = Math.max(0, Math.min(clickCol, val.length));
+        workingCursorRef.current = newPos;
+        lastSentCursorRef.current = newPos;
+        setCursorPos(newPos);
+      }
+    },
     ref: (node: any) => {
       if (node) {
         nodeRef.current = node;

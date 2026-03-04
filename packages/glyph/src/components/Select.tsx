@@ -472,7 +472,19 @@ export const Select = forwardRef<SelectHandle, SelectProps>(
       dropdownChildren.push(
         React.createElement(
           "box" as any,
-          { key: `item-${item.value}`, style: itemStyle },
+          {
+            key: `item-${item.value}`,
+            style: itemStyle,
+            onClick: isDisabled ? undefined : () => {
+              onChangeRef.current?.(item.value);
+              setIsOpen(false);
+              setSearchText("");
+            },
+            onMouseEnter: isDisabled ? undefined : () => {
+              setHighlightIndex(actualIndex);
+              ensureVisible(actualIndex);
+            },
+          },
           React.createElement(
             "text" as any,
             { style: textStyle },
@@ -586,6 +598,19 @@ export const Select = forwardRef<SelectHandle, SelectProps>(
         // Always focusable - disabled state is handled in input handler
         // This ensures focusId is assigned on mount, even if initially disabled
         focusable: true,
+        onClick: disabled ? undefined : () => {
+          if (isOpen) {
+            setIsOpen(false);
+            setSearchText("");
+          } else {
+            setIsOpen(true);
+            setSearchText("");
+            const idx = filteredItems.findIndex((item) => item.value === value);
+            const start = idx >= 0 ? idx : 0;
+            setHighlightIndex(start);
+            setScrollOffset(Math.max(0, start - Math.floor(maxVisible / 2)));
+          }
+        },
         ref: (node: any) => {
           if (node) {
             nodeRef.current = node;

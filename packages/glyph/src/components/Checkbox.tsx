@@ -152,6 +152,7 @@ export const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
       {
         style: mergedStyle,
         focusable: true,
+        onClick: disabled ? undefined : () => { onChangeRef.current(!checkedRef.current); },
         ref: (node: any) => {
           if (node) {
             nodeRef.current = node;

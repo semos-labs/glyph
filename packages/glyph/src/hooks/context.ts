@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import type { Key, LayoutRect } from "../types/index.js";
+import type { Key, MouseEvent, LayoutRect } from "../types/index.js";
 import type { GlyphNode } from "../reconciler/nodes.js";
 
 // ---- Input Context ----
@@ -175,3 +175,14 @@ export interface ImageOverlayContextValue {
 }
 
 export const ImageOverlayContext = createContext<ImageOverlayContextValue | null>(null);
+
+// ---- Mouse Context ----
+/** Global mouse event handler. Receives the event and the hit-tested node (or null). */
+export type GlobalMouseHandler = (event: MouseEvent, node: GlyphNode | null) => void;
+
+export interface MouseContextValue {
+  /** Subscribe to all mouse events. Returns an unsubscribe function. */
+  subscribe(handler: GlobalMouseHandler): () => void;
+}
+
+export const MouseContext = createContext<MouseContextValue | null>(null);

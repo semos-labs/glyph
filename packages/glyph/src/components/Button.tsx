@@ -136,6 +136,7 @@ export const Button = forwardRef<ButtonHandle, ButtonProps>(
       {
         style: mergedStyle,
         focusable: true,
+        onClick: disabled ? undefined : () => { onPressRef.current?.(); },
         ref: (node: any) => {
           if (node) {
             nodeRef.current = node;

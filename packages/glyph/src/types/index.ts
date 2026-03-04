@@ -6,6 +6,8 @@ export type {
   MediaQueryInput,
   LayoutRect,
   Key,
+  MouseEvent,
+  MouseEventHandler,
   RenderOptions,
   AppHandle,
   Color,

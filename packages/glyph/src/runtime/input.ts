@@ -1,4 +1,9 @@
-import type { Key } from "../types/index.js";
+import type { Key, MouseEvent } from "../types/index.js";
+
+/** A parsed input event — either a keyboard key or a mouse event. */
+export type ParsedInput =
+  | { kind: "key"; key: Key }
+  | { kind: "mouse"; event: MouseEvent };
 
 // Map key codes to key names (for kitty protocol and xterm modifyOtherKeys)
 function getKeyNameFromCode(code: number): string {
@@ -133,7 +138,13 @@ function applyModifiers(key: Key, mod: number): void {
 }
 
 export function parseKeySequence(data: string): Key[] {
-  const keys: Key[] = [];
+  return parseInput(data)
+    .filter((p): p is { kind: "key"; key: Key } => p.kind === "key")
+    .map((p) => p.key);
+}
+
+export function parseInput(data: string): ParsedInput[] {
+  const results: ParsedInput[] = [];
   let i = 0;
 
   while (i < data.length) {
@@ -144,9 +155,18 @@ export function parseKeySequence(data: string): Key[] {
     if (ch === "\x1b") {
       // CSI sequences: ESC [
       if (data[i + 1] === "[") {
+        // Check for SGR mouse: ESC [ <
+        if (data[i + 2] === "<") {
+          const mouseResult = parseSgrMouse(data, i);
+          if (mouseResult) {
+            results.push({ kind: "mouse", event: mouseResult.event });
+            i = mouseResult.end;
+            continue;
+          }
+        }
         const seq = parseCsiSequence(data, i);
         if (seq) {
-          keys.push(seq.key);
+          results.push({ kind: "key", key: seq.key });
           i = seq.end;
           continue;
         }
@@ -156,7 +176,7 @@ export function parseKeySequence(data: string): Key[] {
       if (data[i + 1] === "O") {
         const seq = parseSs3Sequence(data, i);
         if (seq) {
-          keys.push(seq.key);
+          results.push({ kind: "key", key: seq.key });
           i = seq.end;
           continue;
         }
@@ -167,18 +187,18 @@ export function parseKeySequence(data: string): Key[] {
         const nextChar = data[i + 1]!;
         const nextCode = data.charCodeAt(i + 1);
         const isUpper = nextCode >= 65 && nextCode <= 90;
-        keys.push({
+        results.push({ kind: "key", key: {
           name: nextChar === " " ? "space" : nextChar.toLowerCase(),
           sequence: data.substring(i, i + 2),
           alt: true,
           ...(isUpper && { shift: true }),
-        });
+        }});
         i += 2;
         continue;
       }
 
       // Standalone ESC
-      keys.push({ name: "escape", sequence: "\x1b" });
+      results.push({ kind: "key", key: { name: "escape", sequence: "\x1b" } });
       i++;
       continue;
     }
@@ -187,13 +207,13 @@ export function parseKeySequence(data: string): Key[] {
     if (code >= 1 && code <= 26) {
       const letter = String.fromCharCode(code + 96); // a-z
       if (code === 13) {
-        keys.push({ name: "return", sequence: "\r" });
+        results.push({ kind: "key", key: { name: "return", sequence: "\r" } });
       } else if (code === 9) {
-        keys.push({ name: "tab", sequence: "\t" });
+        results.push({ kind: "key", key: { name: "tab", sequence: "\t" } });
       } else if (code === 8) {
-        keys.push({ name: "backspace", sequence: "\b" });
+        results.push({ kind: "key", key: { name: "backspace", sequence: "\b" } });
       } else {
-        keys.push({ name: letter, sequence: ch, ctrl: true });
+        results.push({ kind: "key", key: { name: letter, sequence: ch, ctrl: true } });
       }
       i++;
       continue;
@@ -201,7 +221,7 @@ export function parseKeySequence(data: string): Key[] {
 
     // Backspace / DEL
     if (code === 127) {
-      keys.push({ name: "backspace", sequence: ch });
+      results.push({ kind: "key", key: { name: "backspace", sequence: ch } });
       i++;
       continue;
     }
@@ -210,14 +230,14 @@ export function parseKeySequence(data: string): Key[] {
     // Uppercase letters (A-Z) → shifted lowercase in legacy terminal mode
     // (Kitty/xterm protocols already handle this via CSI u sequences)
     if (code >= 65 && code <= 90) {
-      keys.push({ name: ch.toLowerCase(), sequence: ch, shift: true });
+      results.push({ kind: "key", key: { name: ch.toLowerCase(), sequence: ch, shift: true } });
     } else {
-      keys.push({ name: ch === " " ? "space" : ch, sequence: ch });
+      results.push({ kind: "key", key: { name: ch === " " ? "space" : ch, sequence: ch } });
     }
     i++;
   }
 
-  return keys;
+  return results;
 }
 
 interface SeqResult {
@@ -402,4 +422,101 @@ function parseCsiSequence(data: string, start: number): SeqResult | null {
   }
 
   return { key, end: i };
+}
+
+// ── SGR mouse sequence parser ────────────────────────────────────
+// Format: ESC [ < Pb ; Px ; Py M  (press/motion)
+//         ESC [ < Pb ; Px ; Py m  (release)
+// Pb bitmask:
+//   bits 0-1: button  (0=left, 1=middle, 2=right)
+//   bit 2: shift
+//   bit 3: alt/meta
+//   bit 4: ctrl
+//   bit 5 (32): motion flag
+//   bit 6 (64): wheel (64+0 = up, 64+1 = down)
+
+interface MouseSeqResult {
+  event: MouseEvent;
+  end: number;
+}
+
+function parseSgrMouse(data: string, start: number): MouseSeqResult | null {
+  // start points to ESC, start+1 is '[', start+2 is '<'
+  let i = start + 3;
+  let params = "";
+
+  // Collect parameter bytes (digits and semicolons)
+  while (i < data.length) {
+    const c = data.charCodeAt(i);
+    if ((c >= 0x30 && c <= 0x39) || c === 0x3b) { // 0-9, ;
+      params += data[i];
+      i++;
+    } else {
+      break;
+    }
+  }
+
+  if (i >= data.length) return null;
+
+  const final = data[i]!;
+  // M = press/motion, m = release
+  if (final !== "M" && final !== "m") return null;
+  i++;
+
+  const parts = params.split(";");
+  if (parts.length < 3) return null;
+
+  const pb = parseInt(parts[0]!, 10);
+  const px = parseInt(parts[1]!, 10) - 1; // SGR is 1-indexed
+  const py = parseInt(parts[2]!, 10) - 1;
+
+  if (isNaN(pb) || isNaN(px) || isNaN(py)) return null;
+
+  const shift = !!(pb & 4);
+  const alt = !!(pb & 8);
+  const ctrl = !!(pb & 16);
+  const motion = !!(pb & 32);
+  const wheel = !!(pb & 64);
+
+  const isRelease = final === "m";
+
+  let event: MouseEvent;
+
+  if (wheel) {
+    const wheelDir = (pb & 1) ? 1 : -1; // bit 0: 0=up(-1), 1=down(+1)
+    event = {
+      type: "wheel",
+      x: px,
+      y: py,
+      button: -1,
+      wheelDelta: wheelDir,
+      ctrl,
+      alt,
+      shift,
+    };
+  } else if (motion && !isRelease) {
+    const button = (pb & 3) === 3 ? -1 : (pb & 3);
+    event = {
+      type: "mousemove",
+      x: px,
+      y: py,
+      button,
+      ctrl,
+      alt,
+      shift,
+    };
+  } else {
+    const button = pb & 3;
+    event = {
+      type: isRelease ? "mouseup" : "mousedown",
+      x: px,
+      y: py,
+      button,
+      ctrl,
+      alt,
+      shift,
+    };
+  }
+
+  return { event, end: i };
 }

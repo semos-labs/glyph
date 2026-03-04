@@ -186,6 +186,19 @@
         "typescript": "^5.5",
       },
     },
+    "examples/mouse-demo": {
+      "name": "mouse-demo",
+      "dependencies": {
+        "@semos-labs/glyph": "workspace:*",
+        "react": "^19.0.0",
+      },
+      "devDependencies": {
+        "@types/node": "^20",
+        "@types/react": "^19",
+        "tsx": "^4",
+        "typescript": "^5.5",
+      },
+    },
     "examples/responsive-layout": {
       "name": "responsive-layout",
       "dependencies": {
@@ -293,7 +306,7 @@
     },
     "packages/create-glyph": {
       "name": "@semos-labs/create-glyph",
-      "version": "0.2.4",
+      "version": "0.2.9",
       "bin": {
         "create-glyph": "./dist/index.js",
       },
@@ -305,7 +318,7 @@
     },
     "packages/glyph": {
       "name": "@semos-labs/glyph",
-      "version": "0.2.4",
+      "version": "0.2.9",
       "dependencies": {
         "react-reconciler": "^0.31.0",
         "string-width": "^7.2.0",
@@ -706,6 +719,8 @@
     "mlly": ["mlly@1.8.0", "", { "dependencies": { "acorn": "8.15.0", "pathe": "2.0.3", "pkg-types": "1.3.1", "ufo": "1.6.3" } }, "sha512-l8D9ODSRWLe2KHJSifWGwBqpTZXIXTeo8mlKjY+E2HAakaTeNpqAyBZ8GSqLzHgw4XmHmC8whvpjJNMbFZN7/g=="],
 
     "modal-input": ["modal-input@workspace:examples/modal-input"],
+
+    "mouse-demo": ["mouse-demo@workspace:examples/mouse-demo"],
 
     "ms": ["ms@2.1.3", "", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
 

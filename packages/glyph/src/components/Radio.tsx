@@ -231,7 +231,14 @@ function RadioInner<T = string>({
 
     return React.createElement(
       "box" as any,
-      { key: index, style: computedStyle },
+      {
+        key: index,
+        style: computedStyle,
+        onClick: (disabled || isItemDisabled) ? undefined : () => {
+          setHighlightedIndex(index);
+          onChangeRef.current(item.value);
+        },
+      },
       React.createElement(
         "text" as any,
         { key: "radio", style: { color: textColor } },

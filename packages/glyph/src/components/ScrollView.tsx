@@ -834,6 +834,11 @@ export const ScrollView = forwardRef<ScrollViewHandle, ScrollViewProps>(function
         style: outerStyle,
         ref: (node: any) => { viewportRef.current = node ?? null; },
         ...(focusable ? { focusable: true, focusId } : {}),
+        onWheel: (event: any) => {
+          if (event.wheelDelta) {
+            setOffset(offset + event.wheelDelta * scrollStep);
+          }
+        },
       },
       // Content wrapper — absolute so it doesn't push the outer box's height.
       React.createElement(

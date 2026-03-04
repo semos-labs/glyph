@@ -235,11 +235,21 @@ export const List = forwardRef<ListHandle, ListProps>(
     return inputCtx.registerInputHandler(fid, handler);
   }, [inputCtx, focusCtx, focusable, selectedIndex, setIndex, findNextEnabled, findFirstEnabled, disabledIndices, nodeReady]);
 
-  // Render items
+  // Render items (wrapped in box with onClick for mouse support)
   const items: ReactNode[] = [];
   for (let i = 0; i < count; i++) {
+    const idx = i;
+    const isDisabled = disabledIndices?.has(idx);
     items.push(
-      React.createElement(React.Fragment, { key: i },
+      React.createElement(
+        "box" as any,
+        {
+          key: i,
+          onClick: isDisabled ? undefined : () => {
+            setIndex(idx);
+            onSelectRef.current?.(idx);
+          },
+        },
         renderItem({ index: i, selected: i === selectedIndex, focused: isFocused }),
       ),
     );
